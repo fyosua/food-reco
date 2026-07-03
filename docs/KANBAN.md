@@ -14,7 +14,7 @@
 || M2 Auth & users | 6 | 🟢 5/6 done (M2.5 tests pending) |
 || M3 Data pipeline | 6 | 🟢 6/6 done |
 || M4 Recommendation core | 6 | 🟢 6/6 done |
-|| M5 Variety, chat, feedback | 4 | ⬜ Not started |
+|| M5 Variety, chat, feedback | 4 | 🟢 4/4 done |
 || M6 Frontend | 5 | ⬜ Not started |
 || M7 Deploy & CD | 5 | ⬜ Not started |
 
@@ -70,10 +70,10 @@
 
 | Card | Description | Status | Branch | PR |
 |------|-------------|--------|--------|----|
-| M5.1 | `meal_history` logging + non-repetition window | Backlog | — | — |
-| M5.2 | `/api/chat` conversational adjustment | Backlog | — | — |
-| M5.3 | `/api/feedback` 👍/👎 + implicit learning into `user_taste` | Backlog | — | — |
-| M5.4 | `/api/history`, `/api/cities` type-ahead | Backlog | — | — |
+| M5.1 | `meal_history` logging + non-repetition window + variety_appetite tuning | Done | main | — |
+| M5.2 | `/api/chat` conversational adjustment | Done | main | — |
+| M5.3 | `/api/feedback` 👍/👎 → implicit learning into `user_taste` | Done | main | — |
+| M5.4 | `/api/history` with food details + `/api/cities` type-ahead | Done | main | — |
 
 ### EPIC M6 — Frontend
 

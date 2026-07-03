@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.auth.routes import get_current_user
 from app.core.database import get_db
 from app.models.city import City
+from app.models.food import FoodItem
 from app.models.meal import MealHistory
 from app.models.user import User
 
@@ -49,7 +50,7 @@ async def get_meal_history(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return recent served meals for the authenticated user."""
+    """Return recent served meals for the authenticated user with food details."""
     stmt = (
         select(MealHistory)
         .where(MealHistory.user_id == user.id)
@@ -59,10 +60,23 @@ async def get_meal_history(
     result = await db.execute(stmt)
     meals = result.scalars().all()
 
+    # Fetch food item details for each meal
+    food_ids = {m.food_item_id for m in meals}
+    if food_ids:
+        food_result = await db.execute(
+            select(FoodItem).where(FoodItem.id.in_(food_ids))
+        )
+        food_map = {f.id: f for f in food_result.scalars().all()}
+    else:
+        food_map = {}
+
     return [
         {
             "id": m.id,
             "food_item_id": m.food_item_id,
+            "food_name": food_map[m.food_item_id].name_id if m.food_item_id in food_map else None,
+            "food_category": food_map[m.food_item_id].category if m.food_item_id in food_map else None,
+            "calories": food_map[m.food_item_id].calories if m.food_item_id in food_map else None,
             "served_at": m.served_at.isoformat(),
             "slot": m.slot,
             "condition": m.condition,

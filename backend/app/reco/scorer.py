@@ -160,9 +160,13 @@ def compute_score(
             score += weights.w_nutri * 0.5  # Acceptable
         # else: no bonus (still acceptable, just not ideal)
 
-    # ── w_repeat: recency penalty ──
+    # ── w_repeat: recency penalty (scaled by variety_appetite) ──
     if food.id in recent_meal_ids:
-        score -= weights.w_repeat  # Big penalty for recent items
+        repeat_penalty = weights.w_repeat
+        # Scale by variety appetite (0..1). Higher appetite = bigger penalty.
+        if prefs and prefs.variety_appetite is not None:
+            repeat_penalty *= prefs.variety_appetite
+        score -= repeat_penalty  # Big penalty for recent items
 
     # ── w_budget: budget pressure ──
     if prefs and prefs.per_meal_budget_idr and food.price_pasar_max:
