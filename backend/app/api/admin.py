@@ -567,3 +567,359 @@ async def delete_user(
     await db.delete(target)
     await db.flush()
     return {"message": f"User {user_id} deleted", "id": user_id}
+
+
+# ── Health Conditions CRUD ──
+
+
+class HealthConditionCreate(BaseModel):
+    code: str = Field(..., min_length=1)
+    name_id: str = Field(..., min_length=1)
+    label_en: str | None = None
+    sex: str | None = None
+    forbidden_tags_json: str | None = None
+    extra_constraints_json: str | None = None
+    macros_json: str | None = None
+    active: bool = True
+
+
+class HealthConditionUpdate(BaseModel):
+    name_id: str | None = None
+    label_en: str | None = None
+    sex: str | None = None
+    forbidden_tags_json: str | None = None
+    extra_constraints_json: str | None = None
+    macros_json: str | None = None
+    active: bool | None = None
+
+
+def _health_condition_to_dict(item) -> dict:
+    return {
+        "id": item.id,
+        "code": item.code,
+        "name_id": item.name_id,
+        "label_en": item.label_en,
+        "sex": item.sex,
+        "forbidden_tags_json": item.forbidden_tags_json,
+        "extra_constraints_json": item.extra_constraints_json,
+        "macros_json": item.macros_json,
+        "active": bool(item.active),
+    }
+
+
+@router.get("/conditions")
+async def list_conditions(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all health conditions (admin only)."""
+    await require_admin(user)
+    from app.models.health_condition import HealthCondition as HC
+    result = await db.execute(select(HC).order_by(HC.code))
+    items = result.scalars().all()
+    return {
+        "items": [_health_condition_to_dict(item) for item in items],
+        "total": len(items),
+    }
+
+
+@router.post("/conditions")
+async def create_condition(
+    body: HealthConditionCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new health condition (admin only)."""
+    await require_admin(user)
+    from app.models.health_condition import HealthCondition as HC
+    item = HC(
+        code=body.code,
+        name_id=body.name_id,
+        label_en=body.label_en,
+        sex=body.sex,
+        forbidden_tags_json=body.forbidden_tags_json,
+        extra_constraints_json=body.extra_constraints_json,
+        macros_json=body.macros_json,
+        active=body.active,
+    )
+    db.add(item)
+    await db.flush()
+    await db.refresh(item)
+    return {"message": "Health condition created", "item": _health_condition_to_dict(item)}
+
+
+@router.put("/conditions/{code}")
+async def update_condition(
+    code: str,
+    body: HealthConditionUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a health condition by code (admin only)."""
+    await require_admin(user)
+    from app.models.health_condition import HealthCondition as HC
+    result = await db.execute(select(HC).where(HC.code == code))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Health condition not found")
+    update_data = body.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(item, key, value)
+    await db.flush()
+    await db.refresh(item)
+    return {"message": "Health condition updated", "item": _health_condition_to_dict(item)}
+
+
+@router.delete("/conditions/{code}")
+async def delete_condition(
+    code: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a health condition by code (admin only)."""
+    await require_admin(user)
+    from app.models.health_condition import HealthCondition as HC
+    result = await db.execute(select(HC).where(HC.code == code))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Health condition not found")
+    await db.delete(item)
+    await db.flush()
+    return {"message": "Health condition deleted", "code": code}
+
+
+# ── Tag Catalog CRUD ──
+
+
+class TagCatalogCreate(BaseModel):
+    code: str = Field(..., min_length=1)
+    name_id: str = Field(..., min_length=1)
+    label_en: str | None = None
+    category: str = Field(..., min_length=1)
+    description: str | None = None
+    active: bool = True
+
+
+class TagCatalogUpdate(BaseModel):
+    name_id: str | None = None
+    label_en: str | None = None
+    category: str | None = None
+    description: str | None = None
+    active: bool | None = None
+
+
+def _tag_catalog_to_dict(item) -> dict:
+    return {
+        "id": item.id,
+        "code": item.code,
+        "name_id": item.name_id,
+        "label_en": item.label_en,
+        "category": item.category,
+        "description": item.description,
+        "active": bool(item.active),
+    }
+
+
+@router.get("/tags/categories")
+async def list_tag_categories(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all distinct tag categories (admin only)."""
+    await require_admin(user)
+    from app.models.tag_catalog import TagCatalog as TC
+    result = await db.execute(
+        select(TC.category).distinct().where(TC.category.isnot(None)).order_by(TC.category)
+    )
+    categories = [r[0] for r in result.all()]
+    return {"categories": categories}
+
+
+@router.get("/tags")
+async def list_tags(
+    category: str | None = Query(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all tags, optionally filtered by category (admin only)."""
+    await require_admin(user)
+    from app.models.tag_catalog import TagCatalog as TC
+    stmt = select(TC).order_by(TC.code)
+    if category:
+        stmt = stmt.where(TC.category == category)
+    result = await db.execute(stmt)
+    items = result.scalars().all()
+    return {
+        "items": [_tag_catalog_to_dict(item) for item in items],
+        "total": len(items),
+    }
+
+
+@router.post("/tags")
+async def create_tag(
+    body: TagCatalogCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new tag catalog entry (admin only)."""
+    await require_admin(user)
+    from app.models.tag_catalog import TagCatalog as TC
+    item = TC(
+        code=body.code,
+        name_id=body.name_id,
+        label_en=body.label_en,
+        category=body.category,
+        description=body.description,
+        active=body.active,
+    )
+    db.add(item)
+    await db.flush()
+    await db.refresh(item)
+    return {"message": "Tag created", "item": _tag_catalog_to_dict(item)}
+
+
+@router.put("/tags/{code}")
+async def update_tag(
+    code: str,
+    body: TagCatalogUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a tag catalog entry by code (admin only)."""
+    await require_admin(user)
+    from app.models.tag_catalog import TagCatalog as TC
+    result = await db.execute(select(TC).where(TC.code == code))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
+    update_data = body.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(item, key, value)
+    await db.flush()
+    await db.refresh(item)
+    return {"message": "Tag updated", "item": _tag_catalog_to_dict(item)}
+
+
+@router.delete("/tags/{code}")
+async def delete_tag(
+    code: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a tag catalog entry by code (admin only)."""
+    await require_admin(user)
+    from app.models.tag_catalog import TagCatalog as TC
+    result = await db.execute(select(TC).where(TC.code == code))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
+    await db.delete(item)
+    await db.flush()
+    return {"message": "Tag deleted", "code": code}
+
+
+# ── Cuisine Types CRUD ──
+
+
+class CuisineTypeCreate(BaseModel):
+    code: str = Field(..., min_length=1)
+    name_id: str = Field(..., min_length=1)
+    label_en: str | None = None
+    island_group: str | None = None
+    active: bool = True
+
+
+class CuisineTypeUpdate(BaseModel):
+    name_id: str | None = None
+    label_en: str | None = None
+    island_group: str | None = None
+    active: bool | None = None
+
+
+def _cuisine_type_to_dict(item) -> dict:
+    return {
+        "id": item.id,
+        "code": item.code,
+        "name_id": item.name_id,
+        "label_en": item.label_en,
+        "island_group": item.island_group,
+        "active": bool(item.active),
+    }
+
+
+@router.get("/cuisines")
+async def list_cuisines(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all cuisine types (admin only)."""
+    await require_admin(user)
+    from app.models.cuisine_type import CuisineType as CT
+    result = await db.execute(select(CT).order_by(CT.code))
+    items = result.scalars().all()
+    return {
+        "items": [_cuisine_type_to_dict(item) for item in items],
+        "total": len(items),
+    }
+
+
+@router.post("/cuisines")
+async def create_cuisine(
+    body: CuisineTypeCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new cuisine type (admin only)."""
+    await require_admin(user)
+    from app.models.cuisine_type import CuisineType as CT
+    item = CT(
+        code=body.code,
+        name_id=body.name_id,
+        label_en=body.label_en,
+        island_group=body.island_group,
+        active=body.active,
+    )
+    db.add(item)
+    await db.flush()
+    await db.refresh(item)
+    return {"message": "Cuisine type created", "item": _cuisine_type_to_dict(item)}
+
+
+@router.put("/cuisines/{code}")
+async def update_cuisine(
+    code: str,
+    body: CuisineTypeUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a cuisine type by code (admin only)."""
+    await require_admin(user)
+    from app.models.cuisine_type import CuisineType as CT
+    result = await db.execute(select(CT).where(CT.code == code))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cuisine type not found")
+    update_data = body.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(item, key, value)
+    await db.flush()
+    await db.refresh(item)
+    return {"message": "Cuisine type updated", "item": _cuisine_type_to_dict(item)}
+
+
+@router.delete("/cuisines/{code}")
+async def delete_cuisine(
+    code: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a cuisine type by code (admin only)."""
+    await require_admin(user)
+    from app.models.cuisine_type import CuisineType as CT
+    result = await db.execute(select(CT).where(CT.code == code))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cuisine type not found")
+    await db.delete(item)
+    await db.flush()
+    return {"message": "Cuisine type deleted", "code": code}

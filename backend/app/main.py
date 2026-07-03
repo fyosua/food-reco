@@ -44,6 +44,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️  Seed error (non-fatal): {e}")
 
+    # Seed admin-control tables (health_condition, tag_catalog, cuisine_type)
+    try:
+        from scripts.seed_admin_tables import seed_admin_tables
+        await seed_admin_tables()
+    except Exception as e:
+        print(f"⚠️  Admin table seed error (non-fatal): {e}")
+
     yield
 
     # Shutdown: cleanup

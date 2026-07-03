@@ -11,12 +11,15 @@ import {
   type CityCreate,
   type PriceOverride,
   type AdminUser,
+  type HealthCondition,
+  type TagEntry,
+  type CuisineEntry,
 } from "../lib/api";
 import { useSortable, SortIcon, LimitSelector, Pagination } from "../lib/sortable";
 
 /* ─── Types ─── */
 
-type TabKey = "makanan" | "provinsi" | "kota" | "override" | "users";
+type TabKey = "makanan" | "provinsi" | "kota" | "override" | "users" | "kondisi" | "tags" | "masakan";
 
 interface TabDef {
   key: TabKey;
@@ -30,6 +33,9 @@ const TABS: TabDef[] = [
   { key: "kota", label: "Kota", icon: "🏙️" },
   { key: "override", label: "Override", icon: "💰" },
   { key: "users", label: "Users", icon: "👥" },
+  { key: "kondisi", label: "Kondisi", icon: "❤️" },
+  { key: "tags", label: "Tags", icon: "🏷️" },
+  { key: "masakan", label: "Masakan", icon: "🍳" },
 ];
 
 /* ─── Food Tab Types ─── */
@@ -1434,7 +1440,1398 @@ function UsersTab() {
   );
 }
 
-/* ─── Main Component ─── */
+/* ─── Tab: Kondisi (Health Conditions) ─── */
+
+interface ConditionModalState {
+  open: boolean;
+  mode: "create" | "edit";
+  condition: HealthCondition | null;
+}
+
+interface ConditionDeleteState {
+  open: boolean;
+  condition: HealthCondition | null;
+  deleting: boolean;
+}
+
+interface ConditionFormData {
+  code: string;
+  name_id: string;
+  label_en: string;
+  sex: string;
+  forbidden_tags_json: string;
+  extra_constraints_json: string;
+  macros_json: string;
+  active: boolean;
+}
+
+const emptyConditionForm = (): ConditionFormData => ({
+  code: "",
+  name_id: "",
+  label_en: "",
+  sex: "",
+  forbidden_tags_json: "",
+  extra_constraints_json: "",
+  macros_json: "",
+  active: true,
+});
+
+function ConditionsTab() {
+  const [conditions, setConditions] = useState<HealthCondition[]>([]);
+  const [total, setTotal] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [modal, setModal] = useState<ConditionModalState>({
+    open: false,
+    mode: "create",
+    condition: null,
+  });
+  const [form, setForm] = useState<ConditionFormData>(emptyConditionForm());
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [del, setDel] = useState<ConditionDeleteState>({
+    open: false,
+    condition: null,
+    deleting: false,
+  });
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  const deleteRef = useRef<HTMLDivElement>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const res = await api.adminGetConditions();
+      setConditions(res.items);
+      setTotal(res.total);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Gagal memuat kondisi");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const filteredConditions = conditions.filter((c) => {
+    if (search) {
+      const q = search.toLowerCase();
+      return c.name_id.toLowerCase().includes(q) || c.code.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const {
+    sorted: sortedConditions,
+    sortField,
+    sortDir,
+    toggleSort,
+    limit,
+    setLimit,
+    page,
+    totalPages,
+    totalItems,
+    nextPage,
+    prevPage,
+    hasNext,
+    hasPrev,
+  } = useSortable(filteredConditions, "code" as keyof HealthCondition);
+
+  function openCreateModal() {
+    setForm(emptyConditionForm());
+    setFormError(null);
+    setModal({ open: true, mode: "create", condition: null });
+  }
+
+  function openEditModal(c: HealthCondition) {
+    setForm({
+      code: c.code,
+      name_id: c.name_id,
+      label_en: c.label_en || "",
+      sex: c.sex || "",
+      forbidden_tags_json: c.forbidden_tags_json || "",
+      extra_constraints_json: c.extra_constraints_json || "",
+      macros_json: c.macros_json || "",
+      active: c.active,
+    });
+    setFormError(null);
+    setModal({ open: true, mode: "edit", condition: c });
+  }
+
+  function closeModal() {
+    setModal({ open: false, mode: "create", condition: null });
+    setFormError(null);
+  }
+
+  function updateFormField<K extends keyof ConditionFormData>(
+    key: K,
+    value: ConditionFormData[K]
+  ) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setFormError(null);
+
+    const payload: Partial<HealthCondition> = {
+      code: form.code.trim(),
+      name_id: form.name_id.trim(),
+      label_en: form.label_en.trim() || undefined,
+      sex: form.sex || null,
+      forbidden_tags_json: form.forbidden_tags_json.trim() || null,
+      extra_constraints_json: form.extra_constraints_json.trim() || null,
+      macros_json: form.macros_json.trim() || null,
+      active: form.active,
+    };
+
+    try {
+      if (modal.mode === "create") {
+        await api.adminCreateCondition(payload);
+      } else if (modal.condition) {
+        await api.adminUpdateCondition(modal.condition.code, payload);
+      }
+      closeModal();
+      await fetchData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Gagal menyimpan";
+      setFormError(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openDeleteModal(c: HealthCondition) {
+    setDel({ open: true, condition: c, deleting: false });
+  }
+
+  function closeDeleteModal() {
+    setDel({ open: false, condition: null, deleting: false });
+  }
+
+  async function handleDelete() {
+    if (!del.condition) return;
+    setDel((prev) => ({ ...prev, deleting: true }));
+    try {
+      await api.adminDeleteCondition(del.condition.code);
+      closeDeleteModal();
+      await fetchData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Gagal menghapus kondisi";
+      alert(msg);
+      setDel((prev) => ({ ...prev, deleting: false }));
+    }
+  }
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (del.open) closeDeleteModal();
+        else if (modal.open) closeModal();
+      }
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [modal.open, del.open]);
+
+  useEffect(() => {
+    if (!modal.open) return;
+    const handler = (e: MouseEvent) => {
+      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
+        closeModal();
+      }
+    };
+    setTimeout(() => document.addEventListener("mousedown", handler), 0);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [modal.open]);
+
+  useEffect(() => {
+    if (!del.open) return;
+    const handler = (e: MouseEvent) => {
+      if (deleteRef.current && !deleteRef.current.contains(e.target as Node)) {
+        closeDeleteModal();
+      }
+    };
+    setTimeout(() => document.addEventListener("mousedown", handler), 0);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [del.open]);
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-gray-400">Kelola kondisi kesehatan — {total} total item</p>
+        <button
+          onClick={openCreateModal}
+          className="bg-primary-600 hover:bg-primary-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors shadow-sm flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          Tambah Kondisi
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-1 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Cari Nama / Kode</label>
+            <div className="relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+              </svg>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cari kondisi..."
+                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+          <svg className="w-5 h-5 text-red-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">Gagal memuat data</p>
+            <p className="text-xs text-red-600 mt-0.5">{error}</p>
+          </div>
+          <button onClick={fetchData} className="text-sm text-red-600 hover:text-red-800 font-medium shrink-0">Coba lagi</button>
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin mb-3" />
+          <p className="text-sm text-gray-400">Memuat kondisi...</p>
+        </div>
+      )}
+
+      {!isLoading && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="flex items-center justify-end px-4 py-2 border-b border-gray-100">
+            <LimitSelector limit={limit} onChange={setLimit} />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider cursor-pointer select-none hover:text-primary-600" onClick={() => toggleSort("code" as keyof HealthCondition)}>Kode{SortIcon("code", String(sortField), sortDir)}</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider cursor-pointer select-none hover:text-primary-600" onClick={() => toggleSort("name_id" as keyof HealthCondition)}>Nama{SortIcon("name_id", String(sortField), sortDir)}</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Sex</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Forbidden Tags</th>
+                  <th className="text-center px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider cursor-pointer select-none hover:text-primary-600" onClick={() => toggleSort("active" as keyof HealthCondition)}>Active{SortIcon("active", String(sortField), sortDir)}</th>
+                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {sortedConditions.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
+                      {search ? "Tidak ada kondisi yang sesuai filter." : "Belum ada data kondisi."}
+                    </td>
+                  </tr>
+                ) : (
+                  sortedConditions.map((c) => (
+                    <tr key={c.code} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">{c.code}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-800">{c.name_id}</div>
+                        {c.label_en && <div className="text-xs text-gray-400">{c.label_en}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 text-sm">{c.sex || "—"}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1 max-w-[200px]">
+                          {(() => {
+                            try {
+                              const tags: string[] = c.forbidden_tags_json ? JSON.parse(c.forbidden_tags_json) : [];
+                              return tags.slice(0, 3).map((t) => (
+                                <span key={t} className="inline-block bg-red-50 text-red-600 text-[10px] px-1.5 py-0.5 rounded">{t}</span>
+                              ));
+                            } catch {
+                              return c.forbidden_tags_json ? (
+                                <span className="text-[10px] text-gray-400 truncate max-w-[160px]">{c.forbidden_tags_json}</span>
+                              ) : (
+                                <span className="text-[10px] text-gray-400">—</span>
+                              );
+                            }
+                          })()}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${c.active ? "bg-green-100 text-green-600" : "bg-red-100 text-red-500"}`}>
+                          {c.active ? "✓" : "✗"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => openEditModal(c)} className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button onClick={() => openDeleteModal(c)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Hapus">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="bg-gray-50 border-t border-gray-200 px-4 py-3">
+            <Pagination page={page} totalPages={totalPages} totalItems={totalItems} hasPrev={hasPrev} hasNext={hasNext} onPrev={prevPage} onNext={nextPage} />
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Create / Edit Condition */}
+      {modal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div ref={modalRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">{modal.mode === "create" ? "Tambah Kondisi" : "Edit Kondisi"}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {modal.mode === "create" ? "Isi detail kondisi baru" : `Mengedit ${modal.condition?.code}`}
+                </p>
+              </div>
+              <button onClick={closeModal} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleSave} className="px-6 py-4 space-y-4">
+              {formError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{formError}</div>}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Kode <span className="text-red-400">*</span></label>
+                {modal.mode === "create" ? (
+                  <input type="text" required value={form.code} onChange={(e) => updateFormField("code", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500" placeholder="diabetes" />
+                ) : (
+                  <input type="text" value={form.code} readOnly
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500 cursor-not-allowed" />
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Nama (ID) <span className="text-red-400">*</span></label>
+                  <input type="text" required value={form.name_id} onChange={(e) => updateFormField("name_id", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500" placeholder="Diabetes" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Label (EN)</label>
+                  <input type="text" value={form.label_en} onChange={(e) => updateFormField("label_en", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500" placeholder="Diabetes" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Sex</label>
+                <select value={form.sex} onChange={(e) => updateFormField("sex", e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500 bg-white">
+                  <option value="">Semua (null)</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Forbidden Tags (JSON)</label>
+                <textarea value={form.forbidden_tags_json} onChange={(e) => updateFormField("forbidden_tags_json", e.target.value)} rows={2}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500 font-mono" placeholder='["goreng", "manis"]' />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Extra Constraints (JSON)</label>
+                <textarea value={form.extra_constraints_json} onChange={(e) => updateFormField("extra_constraints_json", e.target.value)} rows={2}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500 font-mono" placeholder='{"max_calories": 1500}' />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Macros (JSON)</label>
+                <textarea value={form.macros_json} onChange={(e) => updateFormField("macros_json", e.target.value)} rows={2}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500 font-mono" placeholder='{"protein": 0.3, "carbs": 0.5, "fat": 0.2}' />
+              </div>
+              <div className="flex items-center gap-3 pt-1">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" checked={form.active} onChange={(e) => updateFormField("active", e.target.checked)} className="sr-only peer" />
+                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-600" />
+                </label>
+                <span className="text-sm text-gray-700 font-medium">Active</span>
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100 mt-6">
+                <button type="button" onClick={closeModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors">Batal</button>
+                <button type="submit" disabled={saving}
+                  className="px-5 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-300 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm flex items-center gap-2">
+                  {saving ? (
+                    <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Menyimpan...</>
+                  ) : (
+                    <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      {modal.mode === "create" ? "Simpan" : "Perbarui"}</>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete Confirmation */}
+      {del.open && del.condition && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div ref={deleteRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="px-6 pt-6 pb-2">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-center text-gray-800">Hapus Kondisi</h3>
+              <p className="text-sm text-gray-500 text-center mt-1">
+                Apakah kamu yakin ingin menghapus<br />
+                <span className="font-semibold text-gray-700">{del.condition.name_id}</span>?
+              </p>
+              <p className="text-xs text-gray-400 text-center mt-2">Tindakan ini tidak dapat dibatalkan.</p>
+            </div>
+            <div className="px-6 pb-6 pt-4 flex gap-3">
+              <button onClick={closeDeleteModal} disabled={del.deleting}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200">Batal</button>
+              <button onClick={handleDelete} disabled={del.deleting}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:bg-red-300 rounded-lg transition-colors flex items-center justify-center gap-2">
+                {del.deleting ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Menghapus...</> : "Hapus"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ─── Tab: Tags ─── */
+
+interface TagModalState {
+  open: boolean;
+  mode: "create" | "edit";
+  tag: TagEntry | null;
+}
+
+interface TagDeleteState {
+  open: boolean;
+  tag: TagEntry | null;
+  deleting: boolean;
+}
+
+interface TagFormData {
+  code: string;
+  name_id: string;
+  label_en: string;
+  category: string;
+  description: string;
+  active: boolean;
+}
+
+const emptyTagForm = (): TagFormData => ({
+  code: "",
+  name_id: "",
+  label_en: "",
+  category: "",
+  description: "",
+  active: true,
+});
+
+function TagsTab() {
+  const [tags, setTags] = useState<TagEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [modal, setModal] = useState<TagModalState>({
+    open: false,
+    mode: "create",
+    tag: null,
+  });
+  const [form, setForm] = useState<TagFormData>(emptyTagForm());
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [del, setDel] = useState<TagDeleteState>({
+    open: false,
+    tag: null,
+    deleting: false,
+  });
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  const deleteRef = useRef<HTMLDivElement>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const res = await api.adminGetTags(filterCategory || undefined);
+      setTags(res.items);
+      setTotal(res.total);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Gagal memuat tag");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filterCategory]);
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const res = await api.adminGetTagCategories();
+      setCategories(res.categories);
+    } catch {
+      // non-critical
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    fetchCategories();
+  }, [fetchData, fetchCategories]);
+
+  const filteredTags = tags.filter((t) => {
+    if (search) {
+      const q = search.toLowerCase();
+      return t.name_id.toLowerCase().includes(q) || t.code.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const {
+    sorted: sortedTags,
+    sortField,
+    sortDir,
+    toggleSort,
+    limit,
+    setLimit,
+    page,
+    totalPages,
+    totalItems,
+    nextPage,
+    prevPage,
+    hasNext,
+    hasPrev,
+  } = useSortable(filteredTags, "code" as keyof TagEntry);
+
+  function openCreateModal() {
+    setForm(emptyTagForm());
+    setFormError(null);
+    setModal({ open: true, mode: "create", tag: null });
+  }
+
+  function openEditModal(t: TagEntry) {
+    setForm({
+      code: t.code,
+      name_id: t.name_id,
+      label_en: t.label_en || "",
+      category: t.category,
+      description: t.description || "",
+      active: t.active,
+    });
+    setFormError(null);
+    setModal({ open: true, mode: "edit", tag: t });
+  }
+
+  function closeModal() {
+    setModal({ open: false, mode: "create", tag: null });
+    setFormError(null);
+  }
+
+  function updateFormField<K extends keyof TagFormData>(
+    key: K,
+    value: TagFormData[K]
+  ) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setFormError(null);
+
+    const payload: Partial<TagEntry> = {
+      code: form.code.trim(),
+      name_id: form.name_id.trim(),
+      label_en: form.label_en.trim() || undefined,
+      category: form.category,
+      description: form.description.trim() || null,
+      active: form.active,
+    };
+
+    try {
+      if (modal.mode === "create") {
+        await api.adminCreateTag(payload);
+      } else if (modal.tag) {
+        await api.adminUpdateTag(modal.tag.code, payload);
+      }
+      closeModal();
+      await fetchData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Gagal menyimpan";
+      setFormError(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openDeleteModal(t: TagEntry) {
+    setDel({ open: true, tag: t, deleting: false });
+  }
+
+  function closeDeleteModal() {
+    setDel({ open: false, tag: null, deleting: false });
+  }
+
+  async function handleDelete() {
+    if (!del.tag) return;
+    setDel((prev) => ({ ...prev, deleting: true }));
+    try {
+      await api.adminDeleteTag(del.tag.code);
+      closeDeleteModal();
+      await fetchData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Gagal menghapus tag";
+      alert(msg);
+      setDel((prev) => ({ ...prev, deleting: false }));
+    }
+  }
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (del.open) closeDeleteModal();
+        else if (modal.open) closeModal();
+      }
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [modal.open, del.open]);
+
+  useEffect(() => {
+    if (!modal.open) return;
+    const handler = (e: MouseEvent) => {
+      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
+        closeModal();
+      }
+    };
+    setTimeout(() => document.addEventListener("mousedown", handler), 0);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [modal.open]);
+
+  useEffect(() => {
+    if (!del.open) return;
+    const handler = (e: MouseEvent) => {
+      if (deleteRef.current && !deleteRef.current.contains(e.target as Node)) {
+        closeDeleteModal();
+      }
+    };
+    setTimeout(() => document.addEventListener("mousedown", handler), 0);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [del.open]);
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-gray-400">Kelola katalog tag — {total} total item</p>
+        <button
+          onClick={openCreateModal}
+          className="bg-primary-600 hover:bg-primary-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors shadow-sm flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          Tambah Tag
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Cari Nama / Kode</label>
+            <div className="relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+              </svg>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cari tag..."
+                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Kategori</label>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500 bg-white"
+            >
+              <option value="">Semua Kategori</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+          <svg className="w-5 h-5 text-red-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">Gagal memuat data</p>
+            <p className="text-xs text-red-600 mt-0.5">{error}</p>
+          </div>
+          <button onClick={fetchData} className="text-sm text-red-600 hover:text-red-800 font-medium shrink-0">Coba lagi</button>
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin mb-3" />
+          <p className="text-sm text-gray-400">Memuat tag...</p>
+        </div>
+      )}
+
+      {!isLoading && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="flex items-center justify-end px-4 py-2 border-b border-gray-100">
+            <LimitSelector limit={limit} onChange={setLimit} />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider cursor-pointer select-none hover:text-primary-600" onClick={() => toggleSort("code" as keyof TagEntry)}>Kode{SortIcon("code", String(sortField), sortDir)}</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider cursor-pointer select-none hover:text-primary-600" onClick={() => toggleSort("name_id" as keyof TagEntry)}>Nama{SortIcon("name_id", String(sortField), sortDir)}</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider cursor-pointer select-none hover:text-primary-600" onClick={() => toggleSort("category" as keyof TagEntry)}>Kategori{SortIcon("category", String(sortField), sortDir)}</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Deskripsi</th>
+                  <th className="text-center px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider cursor-pointer select-none hover:text-primary-600" onClick={() => toggleSort("active" as keyof TagEntry)}>Active{SortIcon("active", String(sortField), sortDir)}</th>
+                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {sortedTags.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-gray-400">
+                      {search || filterCategory ? "Tidak ada tag yang sesuai filter." : "Belum ada data tag."}
+                    </td>
+                  </tr>
+                ) : (
+                  sortedTags.map((t) => (
+                    <tr key={t.code} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">{t.code}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-800">{t.name_id}</div>
+                        {t.label_en && <div className="text-xs text-gray-400">{t.label_en}</div>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{t.category}</span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate">{t.description || "—"}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${t.active ? "bg-green-100 text-green-600" : "bg-red-100 text-red-500"}`}>
+                          {t.active ? "✓" : "✗"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => openEditModal(t)} className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button onClick={() => openDeleteModal(t)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Hapus">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="bg-gray-50 border-t border-gray-200 px-4 py-3">
+            <Pagination page={page} totalPages={totalPages} totalItems={totalItems} hasPrev={hasPrev} hasNext={hasNext} onPrev={prevPage} onNext={nextPage} />
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Create / Edit Tag */}
+      {modal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div ref={modalRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">{modal.mode === "create" ? "Tambah Tag" : "Edit Tag"}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {modal.mode === "create" ? "Isi detail tag baru" : `Mengedit ${modal.tag?.code}`}
+                </p>
+              </div>
+              <button onClick={closeModal} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleSave} className="px-6 py-4 space-y-4">
+              {formError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{formError}</div>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Kode <span className="text-red-400">*</span></label>
+                  <input type="text" required value={form.code} onChange={(e) => updateFormField("code", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500" placeholder="pedas" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Nama (ID) <span className="text-red-400">*</span></label>
+                  <input type="text" required value={form.name_id} onChange={(e) => updateFormField("name_id", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500" placeholder="Pedas" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Label (EN)</label>
+                  <input type="text" value={form.label_en} onChange={(e) => updateFormField("label_en", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500" placeholder="Spicy" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Kategori <span className="text-red-400">*</span></label>
+                  {categories.length > 0 ? (
+                    <select required value={form.category} onChange={(e) => updateFormField("category", e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500 bg-white">
+                      <option value="">Pilih kategori</option>
+                      {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
+                    </select>
+                  ) : (
+                    <input type="text" required value={form.category} onChange={(e) => updateFormField("category", e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500" placeholder="Kategori" />
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Deskripsi</label>
+                <textarea value={form.description} onChange={(e) => updateFormField("description", e.target.value)} rows={2}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500" placeholder="Deskripsi tag..." />
+              </div>
+              <div className="flex items-center gap-3 pt-1">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" checked={form.active} onChange={(e) => updateFormField("active", e.target.checked)} className="sr-only peer" />
+                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-600" />
+                </label>
+                <span className="text-sm text-gray-700 font-medium">Active</span>
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100 mt-6">
+                <button type="button" onClick={closeModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors">Batal</button>
+                <button type="submit" disabled={saving}
+                  className="px-5 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-300 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm flex items-center gap-2">
+                  {saving ? (
+                    <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Menyimpan...</>
+                  ) : (
+                    <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      {modal.mode === "create" ? "Simpan" : "Perbarui"}</>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete Confirmation */}
+      {del.open && del.tag && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div ref={deleteRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="px-6 pt-6 pb-2">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-center text-gray-800">Hapus Tag</h3>
+              <p className="text-sm text-gray-500 text-center mt-1">
+                Apakah kamu yakin ingin menghapus<br />
+                <span className="font-semibold text-gray-700">{del.tag.name_id}</span>?
+              </p>
+              <p className="text-xs text-gray-400 text-center mt-2">Tindakan ini tidak dapat dibatalkan.</p>
+            </div>
+            <div className="px-6 pb-6 pt-4 flex gap-3">
+              <button onClick={closeDeleteModal} disabled={del.deleting}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200">Batal</button>
+              <button onClick={handleDelete} disabled={del.deleting}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:bg-red-300 rounded-lg transition-colors flex items-center justify-center gap-2">
+                {del.deleting ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Menghapus...</> : "Hapus"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ─── Tab: Masakan (Cuisine Types) ─── */
+
+interface CuisineModalState {
+  open: boolean;
+  mode: "create" | "edit";
+  cuisine: CuisineEntry | null;
+}
+
+interface CuisineDeleteState {
+  open: boolean;
+  cuisine: CuisineEntry | null;
+  deleting: boolean;
+}
+
+interface CuisineFormData {
+  code: string;
+  name_id: string;
+  label_en: string;
+  island_group: string;
+  active: boolean;
+}
+
+const emptyCuisineForm = (): CuisineFormData => ({
+  code: "",
+  name_id: "",
+  label_en: "",
+  island_group: "",
+  active: true,
+});
+
+const ISLAND_GROUPS = ["Jawa", "Sumatra", "Kalimantan", "Sulawesi", "Nusa Tenggara", "Maluku", "Papua"];
+
+function CuisinesTab() {
+  const [cuisines, setCuisines] = useState<CuisineEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [modal, setModal] = useState<CuisineModalState>({
+    open: false,
+    mode: "create",
+    cuisine: null,
+  });
+  const [form, setForm] = useState<CuisineFormData>(emptyCuisineForm());
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [del, setDel] = useState<CuisineDeleteState>({
+    open: false,
+    cuisine: null,
+    deleting: false,
+  });
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  const deleteRef = useRef<HTMLDivElement>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const res = await api.adminGetCuisines();
+      setCuisines(res.items);
+      setTotal(res.total);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Gagal memuat masakan");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const filteredCuisines = cuisines.filter((c) => {
+    if (search) {
+      const q = search.toLowerCase();
+      return c.name_id.toLowerCase().includes(q) || c.code.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const {
+    sorted: sortedCuisines,
+    sortField,
+    sortDir,
+    toggleSort,
+    limit,
+    setLimit,
+    page,
+    totalPages,
+    totalItems,
+    nextPage,
+    prevPage,
+    hasNext,
+    hasPrev,
+  } = useSortable(filteredCuisines, "code" as keyof CuisineEntry);
+
+  function openCreateModal() {
+    setForm(emptyCuisineForm());
+    setFormError(null);
+    setModal({ open: true, mode: "create", cuisine: null });
+  }
+
+  function openEditModal(c: CuisineEntry) {
+    setForm({
+      code: c.code,
+      name_id: c.name_id,
+      label_en: c.label_en || "",
+      island_group: c.island_group || "",
+      active: c.active,
+    });
+    setFormError(null);
+    setModal({ open: true, mode: "edit", cuisine: c });
+  }
+
+  function closeModal() {
+    setModal({ open: false, mode: "create", cuisine: null });
+    setFormError(null);
+  }
+
+  function updateFormField<K extends keyof CuisineFormData>(
+    key: K,
+    value: CuisineFormData[K]
+  ) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setFormError(null);
+
+    const payload: Partial<CuisineEntry> = {
+      code: form.code.trim(),
+      name_id: form.name_id.trim(),
+      label_en: form.label_en.trim() || undefined,
+      island_group: form.island_group || null,
+      active: form.active,
+    };
+
+    try {
+      if (modal.mode === "create") {
+        await api.adminCreateCuisine(payload);
+      } else if (modal.cuisine) {
+        await api.adminUpdateCuisine(modal.cuisine.code, payload);
+      }
+      closeModal();
+      await fetchData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Gagal menyimpan";
+      setFormError(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openDeleteModal(c: CuisineEntry) {
+    setDel({ open: true, cuisine: c, deleting: false });
+  }
+
+  function closeDeleteModal() {
+    setDel({ open: false, cuisine: null, deleting: false });
+  }
+
+  async function handleDelete() {
+    if (!del.cuisine) return;
+    setDel((prev) => ({ ...prev, deleting: true }));
+    try {
+      await api.adminDeleteCuisine(del.cuisine.code);
+      closeDeleteModal();
+      await fetchData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Gagal menghapus masakan";
+      alert(msg);
+      setDel((prev) => ({ ...prev, deleting: false }));
+    }
+  }
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (del.open) closeDeleteModal();
+        else if (modal.open) closeModal();
+      }
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [modal.open, del.open]);
+
+  useEffect(() => {
+    if (!modal.open) return;
+    const handler = (e: MouseEvent) => {
+      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
+        closeModal();
+      }
+    };
+    setTimeout(() => document.addEventListener("mousedown", handler), 0);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [modal.open]);
+
+  useEffect(() => {
+    if (!del.open) return;
+    const handler = (e: MouseEvent) => {
+      if (deleteRef.current && !deleteRef.current.contains(e.target as Node)) {
+        closeDeleteModal();
+      }
+    };
+    setTimeout(() => document.addEventListener("mousedown", handler), 0);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [del.open]);
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-gray-400">Kelola tipe masakan — {total} total item</p>
+        <button
+          onClick={openCreateModal}
+          className="bg-primary-600 hover:bg-primary-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors shadow-sm flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          Tambah Masakan
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-1 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Cari Nama / Kode</label>
+            <div className="relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+              </svg>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cari masakan..."
+                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+          <svg className="w-5 h-5 text-red-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">Gagal memuat data</p>
+            <p className="text-xs text-red-600 mt-0.5">{error}</p>
+          </div>
+          <button onClick={fetchData} className="text-sm text-red-600 hover:text-red-800 font-medium shrink-0">Coba lagi</button>
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin mb-3" />
+          <p className="text-sm text-gray-400">Memuat masakan...</p>
+        </div>
+      )}
+
+      {!isLoading && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="flex items-center justify-end px-4 py-2 border-b border-gray-100">
+            <LimitSelector limit={limit} onChange={setLimit} />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider cursor-pointer select-none hover:text-primary-600" onClick={() => toggleSort("code" as keyof CuisineEntry)}>Kode{SortIcon("code", String(sortField), sortDir)}</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider cursor-pointer select-none hover:text-primary-600" onClick={() => toggleSort("name_id" as keyof CuisineEntry)}>Nama{SortIcon("name_id", String(sortField), sortDir)}</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider cursor-pointer select-none hover:text-primary-600" onClick={() => toggleSort("island_group" as keyof CuisineEntry)}>Kelompok Pulau{SortIcon("island_group", String(sortField), sortDir)}</th>
+                  <th className="text-center px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider cursor-pointer select-none hover:text-primary-600" onClick={() => toggleSort("active" as keyof CuisineEntry)}>Active{SortIcon("active", String(sortField), sortDir)}</th>
+                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {sortedCuisines.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-12 text-center text-gray-400">
+                      {search ? "Tidak ada masakan yang sesuai filter." : "Belum ada data masakan."}
+                    </td>
+                  </tr>
+                ) : (
+                  sortedCuisines.map((c) => (
+                    <tr key={c.code} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">{c.code}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-800">{c.name_id}</div>
+                        {c.label_en && <div className="text-xs text-gray-400">{c.label_en}</div>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {c.island_group ? (
+                          <span className="inline-block bg-blue-50 text-blue-600 text-xs px-2 py-0.5 rounded-full">{c.island_group}</span>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${c.active ? "bg-green-100 text-green-600" : "bg-red-100 text-red-500"}`}>
+                          {c.active ? "✓" : "✗"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => openEditModal(c)} className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Edit">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button onClick={() => openDeleteModal(c)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Hapus">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="bg-gray-50 border-t border-gray-200 px-4 py-3">
+            <Pagination page={page} totalPages={totalPages} totalItems={totalItems} hasPrev={hasPrev} hasNext={hasNext} onPrev={prevPage} onNext={nextPage} />
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Create / Edit Cuisine */}
+      {modal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div ref={modalRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">{modal.mode === "create" ? "Tambah Masakan" : "Edit Masakan"}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {modal.mode === "create" ? "Isi detail masakan baru" : `Mengedit ${modal.cuisine?.code}`}
+                </p>
+              </div>
+              <button onClick={closeModal} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleSave} className="px-6 py-4 space-y-4">
+              {formError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{formError}</div>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Kode <span className="text-red-400">*</span></label>
+                  <input type="text" required value={form.code} onChange={(e) => updateFormField("code", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500" placeholder="sunda" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Nama (ID) <span className="text-red-400">*</span></label>
+                  <input type="text" required value={form.name_id} onChange={(e) => updateFormField("name_id", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500" placeholder="Masakan Sunda" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Label (EN)</label>
+                  <input type="text" value={form.label_en} onChange={(e) => updateFormField("label_en", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500" placeholder="Sundanese cuisine" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Kelompok Pulau</label>
+                  <select value={form.island_group} onChange={(e) => updateFormField("island_group", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500 bg-white">
+                    <option value="">Tidak ada (null)</option>
+                    {ISLAND_GROUPS.map((g) => (<option key={g} value={g}>{g}</option>))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 pt-1">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" checked={form.active} onChange={(e) => updateFormField("active", e.target.checked)} className="sr-only peer" />
+                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-600" />
+                </label>
+                <span className="text-sm text-gray-700 font-medium">Active</span>
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100 mt-6">
+                <button type="button" onClick={closeModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors">Batal</button>
+                <button type="submit" disabled={saving}
+                  className="px-5 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-300 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm flex items-center gap-2">
+                  {saving ? (
+                    <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Menyimpan...</>
+                  ) : (
+                    <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      {modal.mode === "create" ? "Simpan" : "Perbarui"}</>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete Confirmation */}
+      {del.open && del.cuisine && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div ref={deleteRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="px-6 pt-6 pb-2">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-center text-gray-800">Hapus Masakan</h3>
+              <p className="text-sm text-gray-500 text-center mt-1">
+                Apakah kamu yakin ingin menghapus<br />
+                <span className="font-semibold text-gray-700">{del.cuisine.name_id}</span>?
+              </p>
+              <p className="text-xs text-gray-400 text-center mt-2">Tindakan ini tidak dapat dibatalkan.</p>
+            </div>
+            <div className="px-6 pb-6 pt-4 flex gap-3">
+              <button onClick={closeDeleteModal} disabled={del.deleting}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200">Batal</button>
+              <button onClick={handleDelete} disabled={del.deleting}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:bg-red-300 rounded-lg transition-colors flex items-center justify-center gap-2">
+                {del.deleting ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Menghapus...</> : "Hapus"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 export default function AdminPage() {
   const navigate = useNavigate();
@@ -1495,6 +2892,9 @@ export default function AdminPage() {
       {activeTab === "kota" && <CitiesTab />}
       {activeTab === "override" && <OverridesTab />}
       {activeTab === "users" && <UsersTab />}
+      {activeTab === "kondisi" && <ConditionsTab />}
+      {activeTab === "tags" && <TagsTab />}
+      {activeTab === "masakan" && <CuisinesTab />}
     </div>
   );
 }

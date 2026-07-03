@@ -261,6 +261,37 @@ export interface AdminUser {
   has_preferences: boolean;
 }
 
+export interface HealthCondition {
+  id: number;
+  code: string;
+  name_id: string;
+  label_en: string | null;
+  sex: string | null;
+  forbidden_tags_json: string | null;
+  extra_constraints_json: string | null;
+  macros_json: string | null;
+  active: boolean;
+}
+
+export interface TagEntry {
+  id: number;
+  code: string;
+  name_id: string;
+  label_en: string | null;
+  category: string;
+  description: string | null;
+  active: boolean;
+}
+
+export interface CuisineEntry {
+  id: number;
+  code: string;
+  name_id: string;
+  label_en: string | null;
+  island_group: string | null;
+  active: boolean;
+}
+
 export const api = {
   // Auth
   register: (email: string, password: string) =>
@@ -380,6 +411,55 @@ export const api = {
     }),
   adminDeleteUser: (id: number) =>
     request<{ message: string }>("/api/admin/users/" + id, {
+      method: "DELETE",
+    }),
+
+  // Admin — Conditions
+  adminGetConditions: () =>
+    request<{ items: HealthCondition[]; total: number }>("/api/admin/conditions"),
+  adminCreateCondition: (data: Partial<HealthCondition>) =>
+    request<HealthCondition>("/api/admin/conditions", { method: "POST", body: data }),
+  adminUpdateCondition: (code: string, data: Partial<HealthCondition>) =>
+    request<HealthCondition>("/api/admin/conditions/" + encodeURIComponent(code), {
+      method: "PUT",
+      body: data,
+    }),
+  adminDeleteCondition: (code: string) =>
+    request<{ message: string }>("/api/admin/conditions/" + encodeURIComponent(code), {
+      method: "DELETE",
+    }),
+
+  // Admin — Tags
+  adminGetTags: (category?: string) =>
+    request<{ items: TagEntry[]; total: number }>("/api/admin/tags", {
+      params: category ? { category } : {},
+    }),
+  adminGetTagCategories: () =>
+    request<{ categories: string[] }>("/api/admin/tags/categories"),
+  adminCreateTag: (data: Partial<TagEntry>) =>
+    request<TagEntry>("/api/admin/tags", { method: "POST", body: data }),
+  adminUpdateTag: (code: string, data: Partial<TagEntry>) =>
+    request<TagEntry>("/api/admin/tags/" + encodeURIComponent(code), {
+      method: "PUT",
+      body: data,
+    }),
+  adminDeleteTag: (code: string) =>
+    request<{ message: string }>("/api/admin/tags/" + encodeURIComponent(code), {
+      method: "DELETE",
+    }),
+
+  // Admin — Cuisines
+  adminGetCuisines: () =>
+    request<{ items: CuisineEntry[]; total: number }>("/api/admin/cuisines"),
+  adminCreateCuisine: (data: Partial<CuisineEntry>) =>
+    request<CuisineEntry>("/api/admin/cuisines", { method: "POST", body: data }),
+  adminUpdateCuisine: (code: string, data: Partial<CuisineEntry>) =>
+    request<CuisineEntry>("/api/admin/cuisines/" + encodeURIComponent(code), {
+      method: "PUT",
+      body: data,
+    }),
+  adminDeleteCuisine: (code: string) =>
+    request<{ message: string }>("/api/admin/cuisines/" + encodeURIComponent(code), {
       method: "DELETE",
     }),
 
