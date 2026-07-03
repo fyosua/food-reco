@@ -37,11 +37,11 @@
 
 | Card | Description | Status | Branch | PR |
 |------|-------------|--------|--------|----|
-| M2.1 | Register/login/logout, argon2, JWT httpOnly cookie, CSRF | Backlog | — | — |
-| M2.2 | Email verification + optional allowlist toggle | Backlog | — | — |
-| M2.3 | `/api/me` + `/api/me/preferences` (rich taste profile) | Backlog | — | — |
-| M2.4 | Per-user rate limiting (`rate_limit_bucket`) | Backlog | — | — |
-| M2.5 | Auth unit + integration tests; security review | Backlog | — | — |
+|| M2.1 | Register/login/logout, argon2, JWT httpOnly cookie, CSRF | Done | main | — |
+|| M2.2 | Email verification + optional allowlist toggle | Backlog | — | — |
+|| M2.3 | `/api/me` + `/api/me/preferences` (rich taste profile) | Backlog | — | — |
+|| M2.4 | Per-user rate limiting (`rate_limit_bucket`) | Backlog | — | — |
+|| M2.5 | Auth unit + integration tests; security review | Backlog | — | — |
 
 ### EPIC M3 — Data pipeline
 
