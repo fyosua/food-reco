@@ -1,0 +1,11 @@
+id,name,province_code,province_name,is_jabodetabek,price_tier,latitude,longitude
+1,Jakarta,dki_jakarta,DKI Jakarta,1,jabodetabek,-6.2088,106.8456
+2,Bandung,jawa_barat,Jawa Barat,0,jawa_barat,-6.9175,107.6191
+3,Surabaya,jawa_timur,Jawa Timur,0,jawa_timur,-7.2575,112.7521
+4,Yogyakarta,di_yogyakarta,DI Yogyakarta,0,di_yogyakarta,-7.7956,110.3695
+5,Medan,sumatera_utara,Sumatera Utara,0,sumatera_utara,3.5952,98.6722
+6,Denpasar,bali,Bali,0,bali,-8.6705,115.2126
+7,Makassar,sulawesi_selatan,Sulawesi Selatan,0,sulawesi_selatan,-5.1477,119.4327
+8,Bogor,jawa_barat,Jawa Barat,1,jabodetabek,-6.5946,106.7893
+9,Tangerang,banten,Banten,1,jabodetabek,-6.1781,106.6300
+10,Bekasi,jawa_barat,Jawa Barat,1,jabodetabek,-6.2349,106.9896

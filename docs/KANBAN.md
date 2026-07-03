@@ -10,13 +10,13 @@
 
 | Epic | Cards | Progress |
 |------|-------|----------|
-| M1 Scaffold & foundations | 6 | ⬜ Not started |
-| M2 Auth & users | 5 | ⬜ Not started |
-| M3 Data pipeline | 6 | ⬜ Not started |
-| M4 Recommendation core | 6 | ⬜ Not started |
-| M5 Variety, chat, feedback | 4 | ⬜ Not started |
-| M6 Frontend | 5 | ⬜ Not started |
-| M7 Deploy & CD | 5 | ⬜ Not started |
+|| M1 Scaffold & foundations | 6 | 🟢 5/6 done (M1.4 CI WIP) |
+|| M2 Auth & users | 5 | ⬜ Not started |
+|| M3 Data pipeline | 6 | ⬜ Not started |
+|| M4 Recommendation core | 6 | ⬜ Not started |
+|| M5 Variety, chat, feedback | 4 | ⬜ Not started |
+|| M6 Frontend | 5 | ⬜ Not started |
+|| M7 Deploy & CD | 5 | ⬜ Not started |
 
 ---
 
@@ -26,12 +26,12 @@
 
 | Card | Description | Status | Branch | PR |
 |------|-------------|--------|--------|----|
-| M1.1 | Init repo, `.gitignore`, `.env.example`, `CONTRIBUTING.md`, branch protection, PR template | Backlog | — | — |
-| M1.2 | Backend skeleton (FastAPI, config, SQLAlchemy, Alembic), `/api/health` | Backlog | — | — |
-| M1.3 | Frontend skeleton (Vite + TS + Tailwind), base layout | Backlog | — | — |
-| M1.4 | CI pipeline (lint, type, test, build) green on empty app | Backlog | — | — |
-| M1.5 | Data model + first migration (`province`, `price_tier_override`, sample seeds) | Backlog | — | — |
-| M1.6 | `docs/` skeleton incl. CONTEXT7_REFS.md, ARCHITECTURE.md | Backlog | — | — |
+|| M1.1 | Init repo, `.gitignore`, `.env.example`, `CONTRIBUTING.md`, branch protection, PR template | Done | main | — |
+|| M1.2 | Backend skeleton (FastAPI, config, SQLAlchemy, Alembic), `/api/health` | Done | main | — |
+|| M1.3 | Frontend skeleton (Vite + TS + Tailwind), base layout | Done | main | — |
+|| M1.4 | CI pipeline (lint, type, test, build) green on empty app | In Progress | — | — |
+|| M1.5 | Data model + first migration + seed CSVs | Done | main | — |
+|| M1.6 | `docs/` skeleton incl. CONTEXT7_REFS.md, ARCHITECTURE.md | Done | main | — |
 
 ### EPIC M2 — Auth & users (Path B)
 
