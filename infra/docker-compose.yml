@@ -1,0 +1,60 @@
+services:
+  nginx:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    image: ghcr.io/fyosua/food-reco/nginx:latest
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - food-reco-net
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: ghcr.io/fyosua/food-reco/backend:latest
+    env_file:
+      - ../.env
+    volumes:
+      - food-reco-data:/app/data
+    restart: unless-stopped
+    networks:
+      - food-reco-net
+
+  crawler:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: ghcr.io/fyosua/food-reco/crawler:latest
+    env_file:
+      - ../.env
+    volumes:
+      - food-reco-data:/app/data
+    restart: unless-stopped
+    networks:
+      - food-reco-net
+    # Crawler runs on-demand via docker exec, not continuously
+    profiles:
+      - crawler
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    env_file:
+      - ../.env
+    restart: unless-stopped
+    networks:
+      - food-reco-net
+    profiles:
+      - production
+
+networks:
+  food-reco-net:
+    driver: bridge
+
+volumes:
+  food-reco-data:

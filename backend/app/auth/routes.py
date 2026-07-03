@@ -53,6 +53,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
         email=body.email,
         password_hash=hash_password(body.password),
         role="user",
+        email_verified=True,  # No SMTP server — auto-verify all new users
     )
     db.add(user)
     await db.flush()
