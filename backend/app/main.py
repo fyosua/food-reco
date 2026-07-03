@@ -1,0 +1,54 @@
+"""FastAPI application factory."""
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.health import router as health_router
+from app.core.config import settings
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan — runs on startup and shutdown."""
+    # Startup: create tables, seed data, etc.
+    from app.core.database import engine
+    from app.models.base import Base
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    yield
+
+    # Shutdown: cleanup
+    await engine.dispose()
+
+
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
+    app = FastAPI(
+        title=settings.app_name,
+        version=settings.app_version,
+        lifespan=lifespan,
+    )
+
+    # CORS — allow frontend dev server and production origin
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5173",  # Vite dev server
+            "https://food.yosuaf.com",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Register routers
+    app.include_router(health_router)
+
+    return app
+
+
+app = create_app()
