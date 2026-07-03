@@ -12,8 +12,8 @@
 |------|-------|----------|
 || M1 Scaffold & foundations | 6 | 🟢 5/6 done (M1.4 CI WIP) |
 || M2 Auth & users | 6 | 🟢 5/6 done (M2.5 tests pending) |
-|| M3 Data pipeline | 6 | 🟢 5/6 done (M3.6 seed starter data pending) |
-|| M4 Recommendation core | 6 | ⬜ Not started |
+|| M3 Data pipeline | 6 | 🟢 6/6 done |
+|| M4 Recommendation core | 6 | 🟢 6/6 done |
 || M5 Variety, chat, feedback | 4 | ⬜ Not started |
 || M6 Frontend | 5 | ⬜ Not started |
 || M7 Deploy & CD | 5 | ⬜ Not started |
@@ -53,18 +53,18 @@
 || M3.3 | Verification gate vs TKPI + price sanity + allergen/pregnancy tagging | Done | main | — |
 || M3.4 | Admin verify endpoints + human-queue | Done | main | — |
 || M3.5 | Provenance + private-data handling; data-QA tests | Done | main | — |
-|| M3.6 | Seed a small verified starter dataset | Backlog | — | — |
+|| M3.6 | Seed a small verified starter dataset | Done | main | — |
 
 ### EPIC M4 — Recommendation core
 
 | Card | Description | Status | Branch | PR |
 |------|-------------|--------|--------|----|
-| M4.1 | Rules layer (condition/sex → targets + forbidden tags) | Backlog | — | — |
-| M4.2 | Price-tier resolution (province + Jabodetabek override) + budget calc | Backlog | — | — |
-| M4.3 | Preference scorer + `weights.py` with unit tests | Backlog | — | — |
-| M4.4 | Candidate filter (hard gates + preference rank + recency) | Backlog | — | — |
-| M4.5 | OpenRouter client, JSON contract, retry/repair, failover | Backlog | — | — |
-| M4.6 | `/api/plan` end-to-end + tests | Backlog | — | — |
+| M4.1 | Rules layer (condition/sex → targets + forbidden tags) | Done | main | — |
+| M4.2 | Price-tier resolution (province + Jabodetabek override) + budget calc | Done | main | — |
+| M4.3 | Preference scorer + `weights.py` with unit tests | Done | main | — |
+| M4.4 | Candidate filter (hard gates + preference rank + recency) | Done | main | — |
+| M4.5 | OpenRouter client, JSON contract, retry/repair, failover | Done | main | — |
+| M4.6 | `/api/plan` end-to-end + tests | Done | main | — |
 
 ### EPIC M5 — Variety, chat, feedback
 
