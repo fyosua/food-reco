@@ -11,7 +11,7 @@
 | Epic | Cards | Progress |
 |------|-------|----------|
 || M1 Scaffold & foundations | 6 | 🟢 5/6 done (M1.4 CI WIP) |
-|| M2 Auth & users | 5 | ⬜ Not started |
+|| M2 Auth & users | 6 | 🟢 5/6 done (M2.5 tests pending) |
 || M3 Data pipeline | 6 | ⬜ Not started |
 || M4 Recommendation core | 6 | ⬜ Not started |
 || M5 Variety, chat, feedback | 4 | ⬜ Not started |
@@ -38,10 +38,11 @@
 | Card | Description | Status | Branch | PR |
 |------|-------------|--------|--------|----|
 || M2.1 | Register/login/logout, argon2, JWT httpOnly cookie, CSRF | Done | main | — |
-|| M2.2 | Email verification + optional allowlist toggle | Backlog | — | — |
-|| M2.3 | `/api/me` + `/api/me/preferences` (rich taste profile) | Backlog | — | — |
-|| M2.4 | Per-user rate limiting (`rate_limit_bucket`) | Backlog | — | — |
+|| M2.2 | Email verification + optional allowlist toggle | Done | main | — |
+|| M2.3 | `/api/me` + `/api/me/preferences` (rich taste profile) | Done | main | — |
+|| M2.4 | Per-user rate limiting (`rate_limit_bucket`) | Done | main | — |
 || M2.5 | Auth unit + integration tests; security review | Backlog | — | — |
+|| M2.6 | `/api/cities`, `/api/feedback`, `/api/history` | Done | main | — |
 
 ### EPIC M3 — Data pipeline
 

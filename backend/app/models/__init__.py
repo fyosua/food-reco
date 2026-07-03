@@ -8,6 +8,7 @@ from app.models.meal import MealHistory, MealFeedback
 from app.models.prefs import UserPref, UserTaste
 from app.models.crawl import CrawlSource, CrawlRecord
 from app.models.rate_limit import RateLimitBucket
+from app.models.verification import EmailVerificationToken
 
 __all__ = [
     "Base",
@@ -23,4 +24,5 @@ __all__ = [
     "CrawlSource",
     "CrawlRecord",
     "RateLimitBucket",
+    "EmailVerificationToken",
 ]

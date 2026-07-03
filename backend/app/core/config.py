@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # ── App ──
     app_name: str = "FoodReco"
     app_version: str = "0.1.0"
+    app_url: str = "http://localhost:8000"
     debug: bool = False
 
     # ── Database ──
