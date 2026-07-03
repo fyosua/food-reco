@@ -1,0 +1,1 @@
+"""LLM client — OpenRouter integration, prompts, retry/repair."""

@@ -1,0 +1,1 @@
+"""Recommendation engine — rules layer, preference scorer, candidate filter."""
