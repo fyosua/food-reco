@@ -8,8 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session_factory
+from app.core.security import hash_password
 from app.models.city import City, PriceTierOverride, Province
 from app.models.food import FoodItem
+from app.models.user import User
+from app.core.config import settings
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
@@ -134,6 +137,30 @@ async def seed_food(db: AsyncSession) -> None:
     print(f"✅ Seeded {len(rows)} food items")
 
 
+async def seed_admin(db: AsyncSession) -> None:
+    """Seed admin user from env vars ADMIN_EMAIL and ADMIN_PASSWORD."""
+    admin_email = settings.admin_email
+    admin_password = settings.admin_password
+    if not admin_email or not admin_password:
+        print("⚠️  ADMIN_EMAIL or ADMIN_PASSWORD not set, skipping admin seed")
+        return
+
+    result = await db.execute(select(User).where(User.email == admin_email))
+    if result.scalar_one_or_none():
+        print(f"ℹ️  Admin user {admin_email} already exists, skipping")
+        return
+
+    user = User(
+        email=admin_email,
+        password_hash=hash_password(admin_password),
+        role="admin",
+        email_verified=True,
+    )
+    db.add(user)
+    await db.flush()
+    print(f"✅ Admin user created: {admin_email}")
+
+
 async def main():
     """Run all seeders."""
     async with async_session_factory() as db:
@@ -141,6 +168,7 @@ async def main():
         await seed_price_tier_overrides(db)
         await seed_cities(db)
         await seed_food(db)
+        await seed_admin(db)
         await db.commit()
     print("🎉 Seeding complete!")
 
