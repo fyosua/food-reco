@@ -191,7 +191,7 @@ def get_recent_meal_ids(
     Returns:
         Set of food_item_ids that were served recently.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window_days)
     return {
         m.food_item_id
         for m in meal_history

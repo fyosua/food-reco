@@ -41,28 +41,14 @@ class ErrorResponse(BaseModel):
 
 @router.post("/register", response_model=AuthResponse)
 async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    """Register a new user account."""
-    result = await db.execute(select(User).where(User.email == body.email))
-    if result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An account with this email already exists",
-        )
+    """Registration is disabled for public access.
 
-    user = User(
-        email=body.email,
-        password_hash=hash_password(body.password),
-        role="user",
-        email_verified=True,  # No SMTP server — auto-verify all new users
-    )
-    db.add(user)
-    await db.flush()
-    await db.refresh(user)
-
-    return AuthResponse(
-        message="Account created successfully",
-        user_id=user.id,
-        email=user.email,
+    New accounts can only be created by the server admin.
+    Contact ferdianyosua@gmail.com to request an account.
+    """
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Pendaftaran ditutup. Hubungi pemilik di ferdianyosua@gmail.com untuk membuat akun.",
     )
 
 

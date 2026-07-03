@@ -40,6 +40,7 @@ class TasteEntry(BaseModel):
 
 class PreferencesUpdate(BaseModel):
     default_condition: str | None = None
+    default_conditions: list[str] = []
     default_sex: str | None = None
     default_city_id: int | None = None
     daily_budget_idr: int | None = None
@@ -52,6 +53,7 @@ class PreferencesUpdate(BaseModel):
 
 class PreferencesResponse(BaseModel):
     default_condition: str | None = None
+    default_conditions: list[str] = []
     default_sex: str | None = None
     default_city_id: int | None = None
     daily_budget_idr: int | None = None
@@ -94,8 +96,14 @@ async def get_preferences(
     if pref and pref.exclusions_json:
         exclusions = json.loads(pref.exclusions_json)
 
+    # Decode default_condition (comma-separated) into list
+    default_conditions = []
+    if pref and pref.default_condition:
+        default_conditions = [c.strip() for c in pref.default_condition.split(",") if c.strip()]
+
     return PreferencesResponse(
         default_condition=pref.default_condition if pref else None,
+        default_conditions=default_conditions,
         default_sex=pref.default_sex if pref else None,
         default_city_id=pref.default_city_id if pref else None,
         daily_budget_idr=pref.daily_budget_idr if pref else None,
@@ -128,12 +136,19 @@ async def update_preferences(
             val = getattr(body, field, None)
             if val is not None:
                 setattr(pref, field, val)
+        # If default_conditions (list) is provided, encode it as comma-separated
+        if body.default_conditions:
+            pref.default_condition = ",".join(body.default_conditions)
         if body.exclusions is not None:
             pref.exclusions_json = json.dumps(body.exclusions)
     else:
+        # Determine condition field: prefer default_conditions list, fall back to string
+        condition_str = body.default_condition
+        if body.default_conditions:
+            condition_str = ",".join(body.default_conditions)
         pref = UserPref(
             user_id=user.id,
-            default_condition=body.default_condition,
+            default_condition=condition_str,
             default_sex=body.default_sex,
             default_city_id=body.default_city_id,
             daily_budget_idr=body.daily_budget_idr,
@@ -174,8 +189,14 @@ async def update_preferences(
     if pref.exclusions_json:
         exclusions = json.loads(pref.exclusions_json)
 
+    # Decode default_condition (comma-separated) into list
+    default_conditions = []
+    if pref.default_condition:
+        default_conditions = [c.strip() for c in pref.default_condition.split(",") if c.strip()]
+
     return PreferencesResponse(
         default_condition=pref.default_condition,
+        default_conditions=default_conditions,
         default_sex=pref.default_sex,
         default_city_id=pref.default_city_id,
         daily_budget_idr=pref.daily_budget_idr,
@@ -261,6 +282,41 @@ async def verify_email(
     await db.flush()
 
     return {"message": "Email verified successfully"}
+
+
+# ── Change Password ──
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=6)
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Change the current user's password."""
+    from app.core.security import hash_password, verify_password
+
+    if not verify_password(body.old_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password lama salah",
+        )
+
+    if body.old_password == body.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password baru harus berbeda dari password lama",
+        )
+
+    user.password_hash = hash_password(body.new_password)
+    await db.flush()
+
+    return {"message": "Password berhasil diubah"}
 
 
 # ── Rate limit check ──

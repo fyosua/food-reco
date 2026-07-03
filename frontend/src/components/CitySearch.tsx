@@ -13,11 +13,54 @@ export default function CitySearch({
   placeholder = "Cari kota...",
 }: CitySearchProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<City[]>([]);
+  const [allCities, setAllCities] = useState<City[]>([]);
+  const [filteredCities, setFilteredCities] = useState<City[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Load all cities on mount, show after typing 1+ chars
+  useEffect(() => {
+    if (!loaded) {
+      setIsLoading(true);
+      // Load all cities with a single empty query (max 1000)
+      api.searchCities("", 1000).then((cities) => {
+        setAllCities(cities);
+        setLoaded(true);
+        setIsLoading(false);
+      }).catch(() => {
+        setIsLoading(false);
+      });
+    }
+  }, [loaded]);
+
+  // Filter locally based on query
+  useEffect(() => {
+    if (query.length < 1) {
+      setFilteredCities([]);
+      return;
+    }
+    const q = query.toLowerCase();
+    const results = allCities.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.province_name && c.province_name.toLowerCase().includes(q))
+    );
+    // Sort: exact matches first, then startsWith, then includes
+    results.sort((a, b) => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+      if (aName === q) return -1;
+      if (bName === q) return 1;
+      if (aName.startsWith(q) && !bName.startsWith(q)) return -1;
+      if (bName.startsWith(q) && !aName.startsWith(q)) return 1;
+      return 0;
+    });
+    setFilteredCities(results);
+    if (results.length > 0) setIsOpen(true);
+  }, [query, allCities]);
 
   // Close on outside click
   useEffect(() => {
@@ -29,27 +72,6 @@ export default function CitySearch({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  // Search on query change
-  useEffect(() => {
-    if (query.length < 1) {
-      setResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      setIsLoading(true);
-      try {
-        const cities = await api.searchCities(query);
-        setResults(cities);
-        setIsOpen(true);
-      } catch {
-        setResults([]);
-      } finally {
-        setIsLoading(false);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [query]);
 
   const handleSelect = (city: City) => {
     setSelectedCity(city);
@@ -64,6 +86,12 @@ export default function CitySearch({
     onChange(null as unknown as City);
   };
 
+  const handleFocus = () => {
+    if (query.length >= 1 && filteredCities.length > 0) {
+      setIsOpen(true);
+    }
+  };
+
   return (
     <div ref={wrapperRef} className="relative">
       <div className="relative">
@@ -74,7 +102,7 @@ export default function CitySearch({
             setQuery(e.target.value);
             if (selectedCity) setSelectedCity(null);
           }}
-          onFocus={() => results.length > 0 && setIsOpen(true)}
+          onFocus={handleFocus}
           placeholder={placeholder}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
@@ -93,9 +121,9 @@ export default function CitySearch({
         )}
       </div>
 
-      {isOpen && results.length > 0 && (
+      {isOpen && filteredCities.length > 0 && (
         <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-          {results.map((city) => (
+          {filteredCities.map((city) => (
             <button
               key={city.id}
               onClick={() => handleSelect(city)}

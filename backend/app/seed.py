@@ -15,6 +15,15 @@ from app.models.user import User
 from app.core.config import settings
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+FALLBACK_DATA_DIR = Path("/app/seed_data")
+
+def _get_data_path(filename: str) -> Path | None:
+    """Look for data file in primary dir, then fallback (for Docker volume)."""
+    for base in [DATA_DIR, FALLBACK_DATA_DIR]:
+        path = base / filename
+        if path.exists():
+            return path
+    return None
 
 
 async def seed_provinces(db: AsyncSession) -> None:
@@ -23,8 +32,8 @@ async def seed_provinces(db: AsyncSession) -> None:
     if result.scalar_one_or_none():
         return  # Already seeded
 
-    path = DATA_DIR / "provinces.csv"
-    if not path.exists():
+    path = _get_data_path("provinces.csv")
+    if not path:
         print("⚠️  provinces.csv not found, skipping province seed")
         return
 
@@ -49,8 +58,8 @@ async def seed_price_tier_overrides(db: AsyncSession) -> None:
     if result.scalar_one_or_none():
         return
 
-    path = DATA_DIR / "price_tier_overrides.csv"
-    if not path.exists():
+    path = _get_data_path("price_tier_overrides.csv")
+    if not path:
         print("⚠️  price_tier_overrides.csv not found, skipping")
         return
 
@@ -75,8 +84,8 @@ async def seed_cities(db: AsyncSession) -> None:
     if result.scalar_one_or_none():
         return
 
-    path = DATA_DIR / "cities.sample.csv"
-    if not path.exists():
+    path = _get_data_path("cities.sample.csv")
+    if not path:
         print("⚠️  cities.sample.csv not found, skipping city seed")
         return
 
@@ -104,8 +113,8 @@ async def seed_food(db: AsyncSession) -> None:
     if result.scalar_one_or_none():
         return
 
-    path = DATA_DIR / "food_seed.sample.csv"
-    if not path.exists():
+    path = _get_data_path("food_seed.sample.csv")
+    if not path:
         print("⚠️  food_seed.sample.csv not found, skipping food seed")
         return
 

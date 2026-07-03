@@ -44,7 +44,7 @@ export default function HomePage() {
         ) : (
           <>
             <Link
-              to="/register"
+              to="/login"
               className="bg-primary-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-primary-700 transition"
             >
               Get Started

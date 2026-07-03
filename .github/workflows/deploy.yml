@@ -40,6 +40,7 @@ jobs:
         with:
           context: ${{ matrix.service == 'nginx' && 'frontend' || 'backend' }}
           file: ${{ matrix.service == 'nginx' && 'frontend/Dockerfile' || 'backend/Dockerfile' }}
+          build-args: ${{ matrix.service == 'nginx' && 'VITE_API_URL=https://foodapi.yosuaf.com' || '' }}
           platforms: linux/amd64,linux/arm64
           tags: |
             ghcr.io/${{ github.repository }}/${{ matrix.service }}:latest

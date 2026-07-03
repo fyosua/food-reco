@@ -141,13 +141,13 @@ class TestRulesLayer:
         assert rule.macro_target.calories == 2500
 
     def test_available_conditions(self):
-        """get_available_conditions returns all conditions with labels."""
+        """get_available_conditions returns all real conditions with labels (excludes "none")."""
         conditions = get_available_conditions()
-        assert len(conditions) == len(CONDITION_RULES)
+        assert len(conditions) == len(CONDITION_RULES) - 1
         condition_ids = {c["id"] for c in conditions}
         assert "pregnant" in condition_ids
         assert "diabetes" in condition_ids
-        assert "none" in condition_ids
+        assert "none" not in condition_ids
 
 
 # ─── M4.2 — Pricing Tests ───
@@ -522,7 +522,8 @@ async def test_plan_conditions_endpoint(client):
     condition_ids = {c["id"] for c in data["conditions"]}
     assert "pregnant" in condition_ids
     assert "diabetes" in condition_ids
-    assert "none" in condition_ids
+    # "none" is not returned — it's the default empty selection
+    assert "none" not in condition_ids
 
 
 @pytest.mark.asyncio
@@ -530,7 +531,7 @@ async def test_plan_endpoint_auth_required(client):
     """Test that /api/plan requires authentication."""
     response = await client.post(
         "/api/plan",
-        json={"condition": "none", "sex": "male", "city_id": 1},
+        json={"conditions": ["none"], "sex": "male", "city_id": 1},
     )
     assert response.status_code == 401 or response.status_code == 403
 
@@ -543,7 +544,7 @@ async def test_plan_endpoint_invalid_city(client):
 
     response = await client.post(
         "/api/plan",
-        json={"condition": "none", "sex": "male", "city_id": 9999},
+        json={"conditions": ["none"], "sex": "male", "city_id": 9999},
         cookies={"access_token": token},
     )
     # If token doesn't match a real user, auth fails first

@@ -19,11 +19,30 @@ from app.core.config import settings
 async def lifespan(app: FastAPI):
     """Application lifespan — runs on startup and shutdown."""
     # Startup: create tables, seed data, etc.
-    from app.core.database import engine
+    from app.core.database import engine, async_session_factory
     from app.models.base import Base
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Seed initial data (idempotent — skips if already seeded)
+    try:
+        from app.seed import (
+            seed_provinces,
+            seed_price_tier_overrides,
+            seed_cities,
+            seed_food,
+            seed_admin,
+        )
+        async with async_session_factory() as session:
+            await seed_provinces(session)
+            await seed_price_tier_overrides(session)
+            await seed_cities(session)
+            await seed_food(session)
+            await seed_admin(session)
+            await session.commit()
+    except Exception as e:
+        print(f"⚠️  Seed error (non-fatal): {e}")
 
     yield
 
@@ -39,12 +58,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS — allow frontend dev server and production origin
+    # CORS — allow frontend dev server and production origins
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
             "http://localhost:5173",  # Vite dev server
             "https://food.yosuaf.com",
+            "https://foodapi.yosuaf.com",
         ],
         allow_credentials=True,
         allow_methods=["*"],

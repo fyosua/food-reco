@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/auth";
-import { api } from "../lib/api";
+import { api, type UserPrefs, type City } from "../lib/api";
 import CitySearch from "../components/CitySearch";
 
 const ALLERGENS = [
@@ -23,66 +23,90 @@ const CUISINES = [
 ];
 
 const CONDITIONS = [
-  { id: "none", label: "No specific condition" },
-  { id: "pregnant", label: "Pregnancy" },
-  { id: "diabetes", label: "Diabetes" },
-  { id: "hypertension", label: "Hypertension" },
-  { id: "heart_disease", label: "Heart Disease" },
-  { id: "kidney_disease", label: "Kidney Disease" },
-  { id: "weight_loss", label: "Weight Loss" },
-  { id: "lactose_intolerant", label: "Lactose Intolerant" },
-  { id: "vegan", label: "Vegan" },
-  { id: "vegetarian", label: "Vegetarian" },
-  { id: "ulcer", label: "Stomach Ulcer / GERD" },
-  { id: "gout", label: "Gout / High Uric Acid" },
-  { id: "anemia", label: "Anemia" },
+  { id: "none", label: "No specific condition", sex: null },
+  { id: "pregnant", label: "Pregnancy", sex: "female" },
+  { id: "diabetes", label: "Diabetes", sex: null },
+  { id: "hypertension", label: "Hypertension", sex: null },
+  { id: "heart_disease", label: "Heart Disease", sex: null },
+  { id: "kidney_disease", label: "Kidney Disease", sex: null },
+  { id: "weight_loss", label: "Weight Loss", sex: null },
+  { id: "lactose_intolerant", label: "Lactose Intolerant", sex: null },
+  { id: "vegan", label: "Vegan", sex: null },
+  { id: "vegetarian", label: "Vegetarian", sex: null },
+  { id: "ulcer", label: "Stomach Ulcer / GERD", sex: null },
+  { id: "gout", label: "Gout / High Uric Acid", sex: null },
+  { id: "anemia", label: "Anemia", sex: null },
 ];
 
 const PROTEINS = ["chicken", "beef", "fish", "egg", "tofu", "tempeh", "shrimp", "lamb"];
 
-type OnboardingStep = "welcome" | "allergies" | "dislikes" | "likes" | "cuisines" | "spice" | "prep" | "condition" | "city" | "budget" | "done";
+const CONDITION_LABELS: Record<string, string> = {
+  pregnant: "Pregnancy", diabetes: "Diabetes", hypertension: "Hypertension",
+  heart_disease: "Heart Disease", kidney_disease: "Kidney Disease",
+  weight_loss: "Weight Loss", lactose_intolerant: "Lactose Intolerant",
+  vegan: "Vegan", vegetarian: "Vegetarian", ulcer: "Stomach Ulcer / GERD",
+  gout: "Gout / High Uric Acid", anemia: "Anemia",
+};
+
+type OnboardingStep = "welcome" | "allergies" | "dislikes" | "likes" | "cuisines" | "spice" | "prep" | "condition" | "city" | "done" | "summary";
 
 export default function PreferencesPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
-  const [step, setStep] = useState<OnboardingStep>(user ? "allergies" : "welcome");
+  const [step, setStep] = useState<OnboardingStep>("welcome");
+  const [savedPrefs, setSavedPrefs] = useState<UserPrefs | null>(null);
+  const [savedCity, setSavedCity] = useState<City | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Wizard state
   const [allergies, setAllergies] = useState<string[]>([]);
   const [dislikes, setDislikes] = useState<string[]>([]);
   const [likes, setLikes] = useState<string[]>([]);
   const [cuisines, setCuisines] = useState<string[]>([]);
   const [spiceLevel, setSpiceLevel] = useState(3);
   const [prepLean, setPrepLean] = useState("balanced");
-  const [condition, setCondition] = useState("none");
+  const [condition, setCondition] = useState<string[]>(["none"]);
   const [sex, setSex] = useState("male");
-  const [city, setCity] = useState<{ id: number; name: string } | null>(null);
+  const [city, setCity] = useState<City | null>(null);
   const [dailyBudget, setDailyBudget] = useState(50000);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const toggleAllergen = (a: string) => {
-    setAllergies((prev) =>
-      prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]
-    );
-  };
-
-  const toggleDislike = (d: string) => {
-    setDislikes((prev) =>
-      prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]
-    );
-  };
-
-  const toggleLike = (l: string) => {
-    setLikes((prev) =>
-      prev.includes(l) ? prev.filter((x) => x !== l) : [...prev, l]
-    );
-  };
-
-  const toggleCuisine = (c: string) => {
-    setCuisines((prev) =>
-      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
-    );
-  };
+  // Load existing preferences on mount
+  useEffect(() => {
+    async function loadPrefs() {
+      try {
+        const [prefsRes, cityRes] = await Promise.all([
+          api.getPreferences().catch(() => null),
+          api.searchCities("", 1000).catch(() => [] as City[]),
+        ]);
+        if (prefsRes && prefsRes.default_conditions && prefsRes.default_conditions.length > 0) {
+          setSavedPrefs(prefsRes);
+          setAllergies(prefsRes.exclusions_json ? JSON.parse(prefsRes.exclusions_json) : []);
+          setCondition(prefsRes.default_conditions.length > 0 ? prefsRes.default_conditions : ["none"]);
+          setSex(prefsRes.default_sex || "male");
+          setDailyBudget(prefsRes.daily_budget_idr || 50000);
+          setPrepLean(prefsRes.prep_lean || "balanced");
+          if (prefsRes.default_city_id) {
+            const found = cityRes.find((c: City) => c.id === prefsRes.default_city_id);
+            if (found) {
+              setSavedCity(found);
+              setCity(found);
+            }
+          }
+          setStep("summary");
+        } else {
+          setStep(user ? "allergies" : "welcome");
+        }
+      } catch {
+        setStep(user ? "allergies" : "welcome");
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadPrefs();
+  }, [user]);
 
   const handleSave = async () => {
     if (!city) {
@@ -93,9 +117,8 @@ export default function PreferencesPage() {
     setError("");
 
     try {
-      // Build taste entries (used implicitly via API)
       await api.updatePreferences({
-        default_condition: condition === "none" ? undefined : condition,
+        default_conditions: condition.includes("none") ? [] : condition,
         default_sex: sex,
         default_city_id: city.id,
         daily_budget_idr: dailyBudget,
@@ -105,6 +128,9 @@ export default function PreferencesPage() {
         exclusions_json: JSON.stringify(allergies),
       });
 
+      const prefsRes = await api.getPreferences();
+      setSavedPrefs(prefsRes);
+      if (city) setSavedCity(city);
       setStep("done");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Gagal menyimpan preferensi";
@@ -113,6 +139,111 @@ export default function PreferencesPage() {
       setIsSaving(false);
     }
   };
+
+  const startEdit = () => {
+    setStep("allergies");
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <p className="text-gray-400">Memuat...</p>
+      </div>
+    );
+  }
+
+  // ── SUMMARY VIEW (existing preferences) ──
+  if (step === "summary" && savedPrefs) {
+    const exclusions = savedPrefs.exclusions_json ? JSON.parse(savedPrefs.exclusions_json) : [];
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">Preferensi Saya</h1>
+          <button
+            onClick={startEdit}
+            className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 transition"
+          >
+            Edit Preferensi
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {/* Kondisi Kesehatan */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <h3 className="font-semibold text-gray-700 mb-2">Kondisi Kesehatan</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {savedPrefs.default_conditions && savedPrefs.default_conditions.length > 0
+                ? savedPrefs.default_conditions.map((c: string) => (
+                    <span key={c} className="px-2.5 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-medium">
+                      {CONDITION_LABELS[c] || c}
+                    </span>
+                  ))
+                : <span className="text-gray-400 text-sm">Tidak ada kondisi khusus</span>}
+            </div>
+          </div>
+
+          {/* Jenis Kelamin */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <h3 className="font-semibold text-gray-700 mb-1">Jenis Kelamin</h3>
+            <p className="text-gray-600 text-sm capitalize">{savedPrefs.default_sex === "male" ? "Laki-laki" : "Perempuan"}</p>
+          </div>
+
+          {/* Kota */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <h3 className="font-semibold text-gray-700 mb-1">Kota</h3>
+            <p className="text-gray-600 text-sm">
+              {savedCity ? `${savedCity.name}${savedCity.province_name ? `, ${savedCity.province_name}` : ""}` : `ID kota: ${savedPrefs.default_city_id}`}
+            </p>
+          </div>
+
+          {/* Budget */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <h3 className="font-semibold text-gray-700 mb-1">Budget Harian</h3>
+            <p className="text-gray-600 text-sm">Rp {savedPrefs.daily_budget_idr?.toLocaleString("id-ID")} / hari</p>
+          </div>
+
+          {/* Alergi */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <h3 className="font-semibold text-gray-700 mb-2">Alergi</h3>
+            {exclusions.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {exclusions.map((a: string) => (
+                  <span key={a} className="px-2.5 py-1 bg-red-50 text-red-600 rounded-full text-xs font-medium">{a}</span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-400 text-sm">Tidak ada alergi</p>
+            )}
+          </div>
+
+          {/* Persiapan */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <h3 className="font-semibold text-gray-700 mb-1">Persiapan Makanan</h3>
+            <p className="text-gray-600 text-sm capitalize">
+              {savedPrefs.prep_lean === "buy_ready" ? "Beli Jadi" : savedPrefs.prep_lean === "simple_cook" ? "Masak Simple" : "Seimbang"}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex gap-3">
+          <button
+            onClick={() => navigate("/plan")}
+            className="flex-1 bg-primary-600 text-white px-4 py-2.5 rounded-lg font-medium hover:bg-primary-700 transition"
+          >
+            Buat Rencana Makan
+          </button>
+          <button
+            onClick={() => navigate("/")}
+            className="flex-1 border border-gray-300 text-gray-700 px-4 py-2.5 rounded-lg font-medium hover:bg-gray-50 transition"
+          >
+            Beranda
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── WIZARD STEPS ──
 
   const StepIndicator = () => (
     <div className="flex justify-center gap-1 mb-8">
@@ -230,7 +361,11 @@ export default function PreferencesPage() {
             {ALLERGENS.map((a) => (
               <button
                 key={a}
-                onClick={() => toggleAllergen(a)}
+                onClick={() => {
+                  setAllergies((prev) =>
+                    prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]
+                  );
+                }}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium border transition ${
                   allergies.includes(a)
                     ? "bg-red-100 border-red-300 text-red-700"
@@ -258,7 +393,11 @@ export default function PreferencesPage() {
             {PROTEINS.map((p) => (
               <button
                 key={p}
-                onClick={() => toggleDislike(p)}
+                onClick={() => {
+                  setDislikes((prev) =>
+                    prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
+                  );
+                }}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium border transition ${
                   dislikes.includes(p)
                     ? "bg-orange-100 border-orange-300 text-orange-700"
@@ -291,7 +430,11 @@ export default function PreferencesPage() {
             {PROTEINS.map((p) => (
               <button
                 key={p}
-                onClick={() => toggleLike(p)}
+                onClick={() => {
+                  setLikes((prev) =>
+                    prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
+                  );
+                }}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium border transition ${
                   likes.includes(p)
                     ? "bg-green-100 border-green-300 text-green-700"
@@ -324,7 +467,11 @@ export default function PreferencesPage() {
             {CUISINES.map((c) => (
               <button
                 key={c.id}
-                onClick={() => toggleCuisine(c.id)}
+                onClick={() => {
+                  setCuisines((prev) =>
+                    prev.includes(c.id) ? prev.filter((x) => x !== c.id) : [...prev, c.id]
+                  );
+                }}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium border transition ${
                   cuisines.includes(c.id)
                     ? "bg-primary-100 border-primary-300 text-primary-700"
@@ -428,24 +575,44 @@ export default function PreferencesPage() {
           <h2 className="text-xl font-bold text-gray-800 mb-2">
             Kondisi Kesehatan
           </h2>
-          <p className="text-gray-500 text-sm mb-6">
-            Pilih kondisi yang relevan untuk rekomendasi yang lebih tepat
+          <p className="text-gray-500 text-sm mb-2">
+            Pilih kondisi yang relevan (bisa lebih dari satu)
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-6">
-            {CONDITIONS.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setCondition(c.id)}
-                className={`text-left px-3 py-2.5 rounded-lg border text-sm transition ${
-                  condition === c.id
-                    ? "bg-primary-50 border-primary-300 text-primary-700"
-                    : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
-                }`}
-              >
-                {c.label}
-              </button>
-            ))}
+          <p className="text-gray-400 text-xs mb-6">
+            Aturan kesehatan akan digabungkan secara otomatis
+          </p>
+          <div className="flex flex-wrap gap-2 mb-6">
+            {CONDITIONS.filter(c => c.id !== "none" && (!c.sex || c.sex === sex)).map((c) => {
+              const isSelected = condition.includes(c.id);
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setCondition((prev) =>
+                      isSelected
+                        ? prev.filter((x) => x !== c.id)
+                        : [...prev.filter((x) => x !== "none"), c.id]
+                    );
+                  }}
+                  className={`px-3 py-2 rounded-lg border text-sm font-medium transition ${
+                    isSelected
+                      ? "bg-primary-100 border-primary-300 text-primary-700"
+                      : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                  }`}
+                >
+                  {c.label}
+                  {isSelected && <span className="ml-1.5 text-primary-400">✓</span>}
+                </button>
+              );
+            })}
           </div>
+          {condition.length === 0 || condition.includes("none") ? (
+            <p className="text-xs text-gray-400 mb-4 italic">Tidak ada kondisi khusus</p>
+          ) : (
+            <p className="text-xs text-primary-600 mb-4">
+              {condition.length} kondisi terpilih
+            </p>
+          )}
 
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -458,7 +625,16 @@ export default function PreferencesPage() {
               ].map((opt) => (
                 <button
                   key={opt.id}
-                  onClick={() => setSex(opt.id)}
+                  onClick={() => {
+                      setSex(opt.id);
+                      // Auto-deselect female-only conditions if switching to male
+                      if (opt.id === "male") {
+                        setCondition((prev) => prev.filter((cId) => {
+                          const cond = CONDITIONS.find((c) => c.id === cId);
+                          return !cond || !cond.sex || cond.sex !== "female";
+                        }));
+                      }
+                    }}
                   className={`flex-1 py-2 rounded-lg border text-sm font-medium transition ${
                     sex === opt.id
                       ? "bg-primary-50 border-primary-300 text-primary-700"

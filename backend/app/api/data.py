@@ -9,8 +9,9 @@ from app.auth.routes import get_current_user
 from app.core.database import get_db
 from app.models.city import City
 from app.models.food import FoodItem
-from app.models.meal import MealHistory
+from app.models.meal import MealHistory, MealFeedback
 from app.models.user import User
+from app.auth.routes import get_current_user
 
 router = APIRouter(tags=["data"])
 
@@ -18,7 +19,7 @@ router = APIRouter(tags=["data"])
 @router.get("/api/cities")
 async def search_cities(
     q: str = Query("", min_length=0, max_length=100),
-    limit: int = Query(10, ge=1, le=50),
+    limit: int = Query(10, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
 ):
     """Type-ahead city search by name."""
@@ -75,8 +76,17 @@ async def get_meal_history(
             "id": m.id,
             "food_item_id": m.food_item_id,
             "food_name": food_map[m.food_item_id].name_id if m.food_item_id in food_map else None,
+            "food_name_en": food_map[m.food_item_id].name_en if m.food_item_id in food_map else None,
             "food_category": food_map[m.food_item_id].category if m.food_item_id in food_map else None,
             "calories": food_map[m.food_item_id].calories if m.food_item_id in food_map else None,
+            "protein_g": food_map[m.food_item_id].protein_g if m.food_item_id in food_map else None,
+            "carbs_g": food_map[m.food_item_id].carbs_g if m.food_item_id in food_map else None,
+            "fat_g": food_map[m.food_item_id].fat_g if m.food_item_id in food_map else None,
+            "fiber_g": food_map[m.food_item_id].fiber_g if m.food_item_id in food_map else None,
+            "prep_type": food_map[m.food_item_id].prep_type if m.food_item_id in food_map else "buy_ready",
+            "tags_json": food_map[m.food_item_id].tags_json if m.food_item_id in food_map else None,
+            "cuisine_tags_json": food_map[m.food_item_id].cuisine_tags_json if m.food_item_id in food_map else None,
+            "price_pasar_min": food_map[m.food_item_id].price_pasar_min if m.food_item_id in food_map else None,
             "served_at": m.served_at.isoformat(),
             "slot": m.slot,
             "condition": m.condition,

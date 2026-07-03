@@ -13,20 +13,20 @@ Mie Goreng,Fried Noodles,noodle,buy_ready,380,12.0,55.0,14.0,2.0,12000,18000,"["
 Pepes Ikan,Fish in Banana Leaf,protein,simple_cook,200,22.0,5.0,12.0,3.0,15000,25000,"[""fish"",""high_protein""]","[""sunda"",""jawa""]",auto_verified,1
 Sayur Asem,Tamarind Vegetable Soup,vegetable,simple_cook,80,2.0,15.0,2.0,5.0,8000,12000,"[""vegetarian"",""vegan""]","[""sunda"",""jawa""]",auto_verified,1
 Tahu Gejrot,Fried Tofu with Sweet Soy Sauce,protein,buy_ready,180,10.0,12.0,10.0,2.0,8000,12000,"[""vegetarian"",""tofu""]","[""sunda""]",auto_verified,1
-Ikan Bakar,Grilled Fish,protein,simple_cook,250,30.0,3.0,14.0,0.0,25000,40000,"[""fish"",""high_protein""]","[""sunda"",""indonesia""]",auto_verified,1
-Gulai Ayam,Chicken Curry,protein,simple_cook,350,25.0,10.0,24.0,2.0,25000,35000,"[""chicken"",""high_protein""]","[""padang"",""jawa""]",auto_verified,1
+Ikan Bakar,Grilled Fish,protein,simple_cook,250,30.0,3.0,14.0,0.0,25000,40000,"[""fish"",""high_protein""]","[""bali"",""manado""]",auto_verified,1
+Gulai Ayam,Chicken Curry,protein,simple_cook,350,25.0,10.0,24.0,2.0,25000,35000,"[""chicken"",""high_protein""]","[""padang"",""bali""]",auto_verified,1
 Tumis Kangkung,Stir-Fried Water Spinach,vegetable,simple_cook,80,3.0,8.0,5.0,3.0,5000,10000,"[""vegetarian"",""vegan""]","[""jawa"",""sunda""]",auto_verified,1
 Bubur Ayam,Chicken Porridge,rice,buy_ready,300,15.0,45.0,8.0,1.0,10000,15000,"[""chicken"",""egg""]","[""jawa""]",auto_verified,1
 Otak-Otak,Fish Cake,protein,buy_ready,180,14.0,12.0,8.0,1.0,12000,18000,"[""fish""]","[""palembang"",""jawa""]",auto_verified,1
-Coto Makassar,Makassar Beef Soup,soup,simple_cook,320,22.0,18.0,18.0,3.0,20000,30000,"[""beef"",""peanut""]","[""makassar"",""sulawesi""]",auto_verified,1
+Coto Makassar,Makassar Beef Soup,soup,simple_cook,320,22.0,18.0,18.0,3.0,20000,30000,"[""beef"",""peanut""]","[""manado""]",auto_verified,1
 Rawon,Dark Beef Soup,soup,simple_cook,350,25.0,20.0,20.0,3.0,25000,35000,"[""beef"",""high_protein""]","[""jawa""]",auto_verified,1
 Lumpia,Spring Rolls,snack,buy_ready,200,5.0,22.0,10.0,2.0,10000,15000,"[""shrimp"",""egg""]","[""chinese_indonesian""]",auto_verified,1
 Dendeng Balado,Beef Jerky with Chili,protein,simple_cook,320,20.0,10.0,22.0,1.0,30000,45000,"[""beef"",""high_protein""]","[""padang""]",auto_verified,1
 Karedok,Vegetable Salad with Raw Peanut Sauce,vegetable,simple_cook,220,8.0,18.0,14.0,5.0,10000,15000,"[""peanut"",""vegetarian""]","[""sunda""]",auto_verified,1
 Nasi Liwet,Savory Coconut Rice,rice,simple_cook,380,6.0,55.0,15.0,0.0,15000,20000,"[""vegetarian""]","[""sunda""]",auto_verified,1
 Sop Buntut,Oxtail Soup,soup,simple_cook,350,22.0,15.0,22.0,1.0,35000,50000,"[""beef""]","[""jawa"",""chinese_indonesian""]",auto_verified,1
-Nasi Uduk,Coconut Rice,rice,buy_ready,350,5.0,50.0,14.0,0.0,12000,18000,"[""egg""]","[""jawa"",""betawi""]",auto_verified,1
+Nasi Uduk,Coconut Rice,rice,buy_ready,350,5.0,50.0,14.0,0.0,12000,18000,"[""egg""]","[""jawa"",""bali""]",auto_verified,1
 Bebek Goreng,Fried Duck,protein,buy_ready,400,28.0,8.0,28.0,1.0,30000,45000,"[""high_protein""]","[""jawa"",""sunda""]",auto_verified,1
 Pempek,Palembang Fish Cake,fish,buy_ready,250,12.0,30.0,10.0,1.0,15000,25000,"[""fish""]","[""palembang""]",auto_verified,1
 Tahu Isi,Stuffed Fried Tofu,protein,buy_ready,200,8.0,15.0,12.0,2.0,5000,10000,"[""tofu"",""vegetarian""]","[""jawa""]",auto_verified,1
-Kerak Telor,Betawi Omelette,rice,buy_ready,280,12.0,28.0,14.0,1.0,15000,20000,"[""egg"",""shrimp""]","[""betawi"",""jakarta""]",auto_verified,1
+Kerak Telor,Betawi Omelette,rice,buy_ready,280,12.0,28.0,14.0,1.0,15000,20000,"[""egg"",""shrimp""]","[""bali""]",auto_verified,1

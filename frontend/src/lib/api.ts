@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 interface ApiOptions {
   method?: string;
@@ -73,7 +73,7 @@ export interface Condition {
 }
 
 export interface PlanRequest {
-  condition: string;
+  conditions: string[];
   sex: string;
   city_id: number;
   age_group?: string;
@@ -104,8 +104,17 @@ export interface HistoryEntry {
   id: number;
   food_item_id: number;
   food_name: string | null;
+  food_name_en: string | null;
   food_category: string | null;
   calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fiber_g: number | null;
+  prep_type: string | null;
+  tags_json: string | null;
+  cuisine_tags_json: string | null;
+  price_pasar_min: number | null;
   served_at: string;
   slot: string;
   condition: string | null;
@@ -120,6 +129,7 @@ export interface UserProfile {
 }
 
 export interface UserPrefs {
+  default_conditions?: string[];
   default_condition?: string;
   default_sex?: string;
   default_city_id?: number;
@@ -128,6 +138,127 @@ export interface UserPrefs {
   variety_appetite?: number;
   prep_lean?: string;
   exclusions_json?: string;
+}
+
+// ── Admin Data Types ──
+
+export interface FoodItem {
+  id: number;
+  name_id: string;
+  name_en: string | null;
+  category: string;
+  prep_type: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
+  price_pasar_min: number | null;
+  price_pasar_max: number | null;
+  tags_json: string | null;
+  cuisine_tags_json: string | null;
+  active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface FoodCreate {
+  name_id: string;
+  name_en?: string;
+  category: string;
+  prep_type: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
+  price_pasar_min?: number;
+  price_pasar_max?: number;
+  tags_json?: string;
+  cuisine_tags_json?: string;
+  active?: boolean;
+}
+
+export interface FoodUpdate {
+  name_id?: string;
+  name_en?: string;
+  category?: string;
+  prep_type?: string;
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+  fiber_g?: number;
+  price_pasar_min?: number;
+  price_pasar_max?: number;
+  tags_json?: string;
+  cuisine_tags_json?: string;
+  active?: boolean;
+}
+
+export interface Province {
+  code: string;
+  name: string;
+  island_group: string;
+  price_multiplier: number;
+}
+
+export interface ProvinceUpdate {
+  name?: string;
+  island_group?: string;
+  price_multiplier?: number;
+}
+
+export interface AdminCity {
+  id: number;
+  name: string;
+  province_code: string;
+  province_name: string | null;
+  is_jabodetabek: boolean;
+  price_tier: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface CityCreate {
+  name: string;
+  province_code: string;
+  province_name?: string;
+  is_jabodetabek?: boolean;
+  price_tier: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface CityUpdate {
+  name?: string;
+  province_code?: string;
+  province_name?: string;
+  is_jabodetabek?: boolean;
+  price_tier?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface PriceOverride {
+  code: string;
+  label: string;
+  price_multiplier: number;
+  member_provinces: string;
+}
+
+export interface OverrideUpdate {
+  label?: string;
+  price_multiplier?: number;
+}
+
+export interface AdminUser {
+  id: number;
+  email: string;
+  role: string;
+  email_verified: boolean;
+  display_name: string | null;
+  has_preferences: boolean;
 }
 
 export const api = {
@@ -186,6 +317,78 @@ export const api = {
   // History
   getHistory: (limit = 20) =>
     request<HistoryEntry[]>("/api/history", { params: { limit } }),
+
+  // Admin — Foods
+  adminGetFoods: (limit = 200) =>
+    request<{ items: FoodItem[]; total: number; limit: number; offset: number }>(
+      "/api/admin/foods",
+      { params: { limit } }
+    ),
+  adminGetFood: (id: number) =>
+    request<FoodItem>("/api/admin/foods/" + id),
+  adminCreateFood: (data: FoodCreate) =>
+    request<FoodItem>("/api/admin/foods", { method: "POST", body: data }),
+  adminUpdateFood: (id: number, data: FoodUpdate) =>
+    request<FoodItem>("/api/admin/foods/" + id, { method: "PUT", body: data }),
+  adminDeleteFood: (id: number) =>
+    request<{ message: string }>("/api/admin/foods/" + id, { method: "DELETE" }),
+  adminGetCategories: () =>
+    request<{ categories: string[] }>("/api/admin/categories"),
+
+  // Admin — Provinces
+  adminGetProvinces: () =>
+    request<{ items: Province[]; total: number }>("/api/admin/provinces"),
+  adminUpdateProvince: (code: string, data: ProvinceUpdate) =>
+    request<Province>("/api/admin/provinces/" + encodeURIComponent(code), {
+      method: "PUT",
+      body: data,
+    }),
+
+  // Admin — Cities
+  adminGetCities: (limit = 200) =>
+    request<{ items: AdminCity[]; total: number }>("/api/admin/cities", {
+      params: { limit },
+    }),
+  adminCreateCity: (data: CityCreate) =>
+    request<AdminCity>("/api/admin/cities", { method: "POST", body: data }),
+  adminUpdateCity: (id: number, data: CityUpdate) =>
+    request<AdminCity>("/api/admin/cities/" + id, {
+      method: "PUT",
+      body: data,
+    }),
+  adminDeleteCity: (id: number) =>
+    request<{ message: string }>("/api/admin/cities/" + id, {
+      method: "DELETE",
+    }),
+
+  // Admin — Price Overrides
+  adminGetOverrides: () =>
+    request<{ items: PriceOverride[]; total: number }>("/api/admin/overrides"),
+  adminUpdateOverride: (code: string, data: OverrideUpdate) =>
+    request<PriceOverride>("/api/admin/overrides/" + encodeURIComponent(code), {
+      method: "PUT",
+      body: data,
+    }),
+
+  // Admin — Users
+  adminGetUsers: () =>
+    request<{ items: AdminUser[]; total: number }>("/api/admin/users"),
+  adminUpdateUserRole: (id: number, role: string) =>
+    request<AdminUser>("/api/admin/users/" + id + "/role", {
+      method: "PUT",
+      body: { role },
+    }),
+  adminDeleteUser: (id: number) =>
+    request<{ message: string }>("/api/admin/users/" + id, {
+      method: "DELETE",
+    }),
+
+  // Change Password
+  changePassword: (oldPassword: string, newPassword: string) =>
+    request<{ message: string }>("/api/me/change-password", {
+      method: "POST",
+      body: { old_password: oldPassword, new_password: newPassword },
+    }),
 
   // Health
   health: () => request<{ status: string }>("/api/health"),

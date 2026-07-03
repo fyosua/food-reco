@@ -3,6 +3,8 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: https://foodapi.yosuaf.com
     image: ghcr.io/fyosua/food-reco/nginx:latest
     ports:
       - "8080:8080"
@@ -37,20 +39,8 @@ services:
     restart: unless-stopped
     networks:
       - food-reco-net
-    # Crawler runs on-demand via docker exec, not continuously
     profiles:
       - crawler
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
-    env_file:
-      - ../.env
-    restart: unless-stopped
-    networks:
-      - food-reco-net
-    profiles:
-      - production
 
 networks:
   food-reco-net:

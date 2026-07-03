@@ -5,6 +5,7 @@ interface AuthState {
   user: UserProfile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isCheckingAuth: boolean; // true while initial auth check runs
   error: string | null;
 
   login: (email: string, password: string) => Promise<boolean>;
@@ -18,6 +19,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: false,
   isAuthenticated: false,
+  isCheckingAuth: true, // starts true until checkAuth completes
   error: null,
 
   login: async (email: string, password: string) => {
@@ -66,9 +68,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   checkAuth: async () => {
     try {
       const user = await api.me();
-      set({ user, isAuthenticated: true });
+      set({ user, isAuthenticated: true, isCheckingAuth: false });
     } catch {
-      set({ user: null, isAuthenticated: false });
+      set({ user: null, isAuthenticated: false, isCheckingAuth: false });
     }
   },
 

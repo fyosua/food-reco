@@ -1,105 +1,56 @@
-import { useState, FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuthStore } from "../store/auth";
+import { Link } from "react-router-dom";
 
 export default function RegisterPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [validationError, setValidationError] = useState("");
-  const { register, isLoading, error, clearError } = useAuthStore();
-  const navigate = useNavigate();
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    clearError();
-    setValidationError("");
-
-    if (password.length < 8) {
-      setValidationError("Password minimal 8 karakter");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setValidationError("Password tidak cocok");
-      return;
-    }
-
-    const success = await register(email, password);
-    if (success) navigate("/preferences");
-  };
-
-  const displayError = validationError || error;
+  const ownerEmail = "ferdianyosua@gmail.com";
 
   return (
     <div className="flex items-center justify-center min-h-[70vh] px-4">
-      <div className="w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center text-gray-800 mb-6">
-          Daftar Akun Baru
+      <div className="w-full max-w-md text-center">
+        {/* Lock icon */}
+        <div className="mx-auto w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-6">
+          <svg
+            className="w-8 h-8 text-amber-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+            />
+          </svg>
+        </div>
+
+        <h1 className="text-2xl font-bold text-gray-800 mb-3">
+          Pendaftaran Ditutup
         </h1>
 
-        {displayError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
-            {displayError}
-          </div>
-        )}
+        <p className="text-gray-600 mb-2 leading-relaxed">
+          FoodReco saat ini dalam tahap pengembangan tertutup.
+          Pendaftaran akun baru hanya tersedia melalui pemilik aplikasi.
+        </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="you@example.com"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="Minimal 8 karakter"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Konfirmasi Password
-            </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="Ulangi password"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-primary-600 text-white py-2.5 rounded-lg font-medium hover:bg-primary-700 transition disabled:opacity-50"
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 my-6 text-left">
+          <p className="text-sm text-blue-800 font-medium mb-2">
+            Ingin mencoba FoodReco?
+          </p>
+          <p className="text-sm text-blue-700">
+            Hubungi pemilik melalui email di bawah ini untuk meminta akun:
+          </p>
+          <a
+            href={`mailto:${ownerEmail}`}
+            className="block mt-2 text-blue-600 font-semibold hover:underline text-sm"
           >
-            {isLoading ? "Loading..." : "Daftar"}
-          </button>
-        </form>
+            {ownerEmail}
+          </a>
+        </div>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
+        <p className="text-sm text-gray-500">
           Sudah punya akun?{" "}
-          <Link to="/login" className="text-primary-600 hover:underline">
-            Masuk
+          <Link to="/login" className="text-primary-600 hover:underline font-medium">
+            Masuk di sini
           </Link>
         </p>
       </div>

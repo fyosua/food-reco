@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.food import FoodItem
 from app.models.meal import MealHistory
 from app.models.prefs import UserPref, UserTaste
-from app.reco.rules import RuleResult, get_rule_result
+from app.reco.rules import RuleResult, get_combined_rule_result
 from app.reco.scorer import score_and_rank, get_recent_meal_ids
 from app.reco.weights import DEFAULT_WEIGHTS, ScoringWeights
 
@@ -51,7 +51,7 @@ def parse_json_tags(tags_json: str | None) -> set[str]:
 async def filter_candidates(
     db: AsyncSession,
     user: User,
-    condition: str,
+    conditions: list[str],
     sex: str,
     age_group: str = "adult",
     weights: ScoringWeights = DEFAULT_WEIGHTS,
@@ -63,7 +63,7 @@ async def filter_candidates(
     Args:
         db: Database session.
         user: The user requesting recommendations.
-        condition: Health condition (e.g. 'pregnant', 'diabetes', 'none').
+        conditions: Health conditions (e.g. ['pregnant', 'diabetes'], ['none']).
         sex: 'male' or 'female'.
         age_group: 'adult', 'elderly', or 'teen'.
         weights: Scoring weights configuration.
@@ -76,8 +76,8 @@ async def filter_candidates(
     if slots is None:
         slots = ["breakfast", "lunch", "dinner"]
 
-    # 1. Get rule result (Stage 1 hard gate definitions)
-    rule = get_rule_result(condition, sex, age_group)
+    # 1. Get combined rule result (Stage 1 hard gate definitions)
+    rule = get_combined_rule_result(conditions, sex, age_group)
 
     # 2. Load user preferences and tastes
     prefs_result = await db.execute(
@@ -153,7 +153,7 @@ async def filter_candidates(
 async def get_candidate_ids(
     db: AsyncSession,
     user: User,
-    condition: str,
+    conditions: list[str],
     sex: str,
     age_group: str = "adult",
     top_n: int = 10,
@@ -166,7 +166,7 @@ async def get_candidate_ids(
     ranked = await filter_candidates(
         db=db,
         user=user,
-        condition=condition,
+        conditions=conditions,
         sex=sex,
         age_group=age_group,
         top_n_per_slot=top_n,

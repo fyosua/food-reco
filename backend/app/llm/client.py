@@ -137,6 +137,11 @@ class LLMClient:
 
                 result = response.json()
                 content = result["choices"][0]["message"]["content"]
+                if content is None:
+                    print("⚠️  LLM returned empty content, retrying...")
+                    if attempt < max_retries:
+                        continue
+                    return None
 
                 # Strip potential markdown fences
                 content = self._strip_fences(content)
@@ -164,17 +169,41 @@ class LLMClient:
                     try:
                         response_model.model_validate(parsed)
                     except Exception as e:
-                        if attempt < max_retries:
-                            print(f"⚠️  Schema validation failed: {e}, retrying...")
-                            full_messages.append({
-                                "role": "user",
-                                "content": (
-                                    f"Your response didn't match the required schema. "
-                                    f"Error: {e}. Please respond with valid JSON matching the schema."
-                                ),
-                            })
-                            continue
-                        return None
+                        # Try to repair common format issues
+                        repaired = self._repair_plan_format(parsed)
+                        if repaired is not None:
+                            try:
+                                response_model.model_validate(repaired)
+                                parsed = repaired
+                                print("⚠️  Plan format repaired successfully")
+                            except Exception:
+                                if attempt < max_retries:
+                                    print(f"⚠️  Schema validation failed: {e}, retrying...")
+                                    full_messages.append({
+                                        "role": "user",
+                                        "content": (
+                                            f"Your response didn't match the required schema. "
+                                            f"Error: {e}. Please respond with valid JSON matching the schema. "
+                                            "The response must have a 'meals' array where each meal has 'slot', 'name', "
+                                            "'description', 'ingredients', 'nutrition', 'prep_type', 'dataset_item_ids'. "
+                                            "Do NOT use breakfast/lunch/dinner as keys."
+                                        ),
+                                    })
+                                    continue
+                        else:
+                            if attempt < max_retries:
+                                print(f"⚠️  Schema validation failed: {e}, retrying...")
+                                full_messages.append({
+                                    "role": "user",
+                                    "content": (
+                                        f"Your response didn't match the required schema. "
+                                        f"Error: {e}. Please respond with valid JSON matching the schema. "
+                                        "The response must have a 'meals' array where each meal has 'slot', 'name', "
+                                        "'description', 'ingredients', 'nutrition', 'prep_type', 'dataset_item_ids'. "
+                                        "Do NOT use breakfast/lunch/dinner as keys."
+                                    ),
+                                })
+                                continue
 
                 return parsed
 
@@ -279,8 +308,61 @@ class LLMClient:
         await self.http_client.aclose()
 
     @staticmethod
-    def _strip_fences(content: str) -> str:
+    def _repair_plan_format(parsed: dict) -> dict | None:
+        """Repair common LLM output format issues for plan generation.
+
+        Handles:
+        - breakfast/lunch/dinner as keys instead of a 'meals' array
+        - ingredients as comma-separated string instead of list
+        - dataset_item_ids as int instead of list
+        - nutrition as nested dict (already correct for Pydantic)
+        """
+        # Step 1: Normalize to {meals: [...]} format
+        if "meals" not in parsed or not isinstance(parsed["meals"], list):
+            # Check if the dict has slot-named keys (breakfast, lunch, dinner, etc.)
+            known_slots = {"breakfast", "lunch", "dinner", "snack", "brunch"}
+            meals = []
+            for key, value in parsed.items():
+                if isinstance(value, dict) and key.lower() in known_slots:
+                    value["slot"] = key.lower()
+                    meals.append(value)
+                elif isinstance(value, list) and key.lower() in known_slots:
+                    for item in value:
+                        if isinstance(item, dict):
+                            item["slot"] = key.lower()
+                            meals.append(item)
+
+            if meals:
+                parsed = {"meals": meals, "notes": parsed.get("notes")}
+            else:
+                return None
+
+        # Step 2: Repair individual meal fields
+        for meal in parsed.get("meals", []):
+            if not isinstance(meal, dict):
+                continue
+            # ingredients: string → list
+            if isinstance(meal.get("ingredients"), str):
+                meal["ingredients"] = [
+                    x.strip() for x in meal["ingredients"].split(",") if x.strip()
+                ]
+            # dataset_item_ids: int → list
+            if isinstance(meal.get("dataset_item_ids"), (int, float)):
+                meal["dataset_item_ids"] = [int(meal["dataset_item_ids"])]
+            # nutrition: ensure it's a dict
+            if not isinstance(meal.get("nutrition"), dict):
+                meal["nutrition"] = {}
+            # price_idr: ensure it's a number
+            if "price_idr" not in meal:
+                meal["price_idr"] = 0
+
+        return parsed
+
+    @staticmethod
+    def _strip_fences(content: str | None) -> str:
         """Strip markdown code fences from LLM output."""
+        if not content:
+            return ""
         # Remove ```json ... ``` fences
         content = re.sub(r'^```(?:json)?\s*\n?', '', content, flags=re.MULTILINE)
         content = re.sub(r'\n?```\s*$', '', content, flags=re.MULTILINE)
@@ -295,6 +377,7 @@ class LLMClient:
         candidates: dict[str, list[dict]],
         forbidden_tags: list[str],
         recent_meals: list[str],
+        already_suggested_ids: list[str] | None = None,
     ) -> tuple[str, str]:
         """Build the system and user prompts for plan generation.
 
@@ -317,14 +400,22 @@ class LLMClient:
             "IMPORTANT RULES:\n"
             "1. Never include any food with these forbidden tags: "
             f"{', '.join(forbidden_tags) if forbidden_tags else 'none'}\n"
-            "2. Vary the meals — avoid repeating the same dish across slots.\n"
+            "2. Vary the meals — avoid repeating the same dish across slots. "
+            "Try to pick different foods for each meal slot.\n"
             "3. Respect the user's macro targets.\n"
             "4. Recent meals to avoid: "
             f"{', '.join(recent_meals) if recent_meals else 'none'}\n"
-            "5. Each meal must have a valid slot, name, description, ingredients, "
-            "nutrition, prep_type, and dataset_item_ids.\n"
-            "6. The nutrition field should approximate the item's known values.\n"
-            "7. Use the candidate items provided — never invent food items."
+            "5. Foods already suggested today (avoid these IDs): "
+            f"{', '.join(already_suggested_ids) if already_suggested_ids else 'none'}\n"
+            "6. JSON format MUST be: {\"meals\": [{\"slot\": \"breakfast\", \"name\": \"...\", "
+            "\"description\": \"...\", \"ingredients\": [\"item1\", \"item2\"], "
+            "\"nutrition\": {\"calories\": 0, \"protein_g\": 0, \"carbs_g\": 0, \"fat_g\": 0, \"fiber_g\": 0}, "
+            "\"prep_type\": \"buy_ready\", \"dataset_item_ids\": [1]}], "
+            "\"notes\": \"...\"}\n"
+            "7. ingredients MUST be a JSON array of strings, NOT a comma-separated string.\n"
+            "8. dataset_item_ids MUST be a JSON array of integers, NOT a single integer.\n"
+            "9. Use the candidate items provided — never invent food items.\n"
+            "10. The nutrition field should approximate the item's known values."
         )
 
         user_prompt = (

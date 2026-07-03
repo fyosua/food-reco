@@ -19,12 +19,14 @@ from dataclasses import dataclass, field
 CONDITION_RULES: dict[str, dict] = {
     "none": {
         "label": "No specific condition",
+        "sex": None,  # All sexes
         "forbidden_tags": [],  # No hard exclusions for healthy adults
         "extra_constraints": {},
         "macros": {},  # Uses general defaults
     },
     "pregnant": {
         "label": "Pregnancy",
+        "sex": "female",  # Only applicable to females
         "forbidden_tags": [
             "raw",
             "high_mercury",
@@ -164,6 +166,89 @@ CONDITION_RULES: dict[str, dict] = {
         },
         "macros": {},
     },
+    "breastfeeding": {
+        "label": "Breastfeeding / Menyusui",
+        "sex": "female",
+        "forbidden_tags": [
+            "high_mercury",
+            "alcohol",
+            "high_caffeine",
+            "raw",
+            "raw_egg",
+        ],
+        "extra_constraints": {
+            "max_caffeine_mg": 300,
+            "calorie_boost": 500,
+            "folate_boost": True,
+            "calcium_boost": True,
+        },
+        "macros": {
+            "carbs_pct": (50, 60),
+            "protein_pct": (20, 25),
+            "fat_pct": (25, 30),
+        },
+    },
+    "high_cholesterol": {
+        "label": "High Cholesterol / Kolesterol Tinggi",
+        "forbidden_tags": [
+            "high_saturated_fat",
+            "trans_fat",
+            "fried",
+            "organ_meat",
+            "high_cholesterol",
+        ],
+        "extra_constraints": {
+            "max_saturated_fat_pct": 7,
+            "max_dietary_cholesterol_mg": 200,
+            "min_fiber_g": 30,
+        },
+        "macros": {
+            "carbs_pct": (50, 60),
+            "protein_pct": (15, 20),
+            "fat_pct": (20, 25),
+        },
+    },
+    "osteoporosis": {
+        "label": "Osteoporosis",
+        "forbidden_tags": [
+            "high_sodium",
+            "high_caffeine",
+            "high_sugar",
+            "alcohol",
+        ],
+        "extra_constraints": {
+            "max_sodium_mg_per_day": 1500,
+            "calcium_boost": True,
+            "vitamin_d_boost": True,
+            "max_caffeine_mg": 200,
+        },
+        "macros": {
+            "carbs_pct": (50, 60),
+            "protein_pct": (18, 25),
+            "fat_pct": (20, 30),
+        },
+    },
+    "pcos": {
+        "label": "PCOS / Sindrom Ovarium Polikistik",
+        "sex": "female",
+        "forbidden_tags": [
+            "high_sugar",
+            "high_carb_refined",
+            "trans_fat",
+            "fried",
+        ],
+        "extra_constraints": {
+            "max_sugar_g_per_meal": 15,
+            "max_glycemic_index": 55,
+            "min_fiber_g": 30,
+            "anti_inflammatory_boost": True,
+        },
+        "macros": {
+            "carbs_pct": (35, 45),
+            "protein_pct": (25, 35),
+            "fat_pct": (25, 35),
+        },
+    },
 }
 
 # ── Sex-based adjustments ──────────────────────────────────────────────
@@ -259,7 +344,12 @@ def get_rule_result(condition: str, sex: str, age_group: str = "adult") -> RuleR
         protein_ratio = 0.20
         fat_ratio = 0.30
 
-    # Calorie adjustment for pregnancy
+    # Calorie adjustment from extra_constraints (e.g. breastfeeding: +500, pregnant: +300)
+    calorie_boost = rule.get("extra_constraints", {}).get("calorie_boost", 0)
+    if isinstance(calorie_boost, (int, float)):
+        base_calories += calorie_boost
+
+    # Calorie adjustment for pregnancy (legacy explicit check)
     if condition == "pregnant":
         base_calories += 300  # Extra for 2nd/3rd trimester
 
@@ -293,9 +383,100 @@ def get_rule_result(condition: str, sex: str, age_group: str = "adult") -> RuleR
     )
 
 
+def get_combined_rule_result(
+    conditions: list[str], sex: str, age_group: str = "adult"
+) -> RuleResult:
+    """Compute the combined rule result for multiple health conditions.
+
+    Args:
+        conditions: List of condition IDs (keys in CONDITION_RULES).
+        sex: 'male' or 'female'.
+        age_group: 'adult', 'elderly', or 'teen'.
+
+    Returns:
+        RuleResult with:
+          - UNION of all forbidden_tags (deduplicated)
+          - Most restrictive macro targets (lowest calories, lowest protein/carbs/fat,
+            highest fiber)
+          - Merged extra_constraints (most restrictive per key)
+          - Combined condition_label
+    """
+    if not conditions:
+        conditions = ["none"]
+
+    # Filter out "none" if mixed with real conditions
+    real_conditions = [c for c in conditions if c != "none"]
+    if real_conditions:
+        conditions = real_conditions
+
+    # Get individual rule results
+    results: list[RuleResult] = []
+    for cond in conditions:
+        results.append(get_rule_result(cond, sex, age_group))
+
+    if not results:
+        return get_rule_result("none", sex, age_group)
+
+    # UNION of forbidden tags
+    all_forbidden: set[str] = set()
+    for r in results:
+        all_forbidden.update(r.forbidden_tags)
+
+    # Most restrictive macro targets
+    # "Most restrictive" = lowest calories, lowest protein, lowest carbs, lowest fat,
+    # highest fiber
+    macro = MacroTarget(
+        calories=min(r.macro_target.calories for r in results),
+        protein_g=min(r.macro_target.protein_g for r in results),
+        carbs_g=min(r.macro_target.carbs_g for r in results),
+        fat_g=min(r.macro_target.fat_g for r in results),
+        fiber_g=max(r.macro_target.fiber_g for r in results),
+    )
+
+    # Merge extra_constraints: most restrictive per key
+    # For max_* keys: take the minimum value
+    # For min_* keys: take the maximum value
+    # For boolean flags: True wins
+    merged_constraints: dict = {}
+    for r in results:
+        for key, val in r.extra_constraints.items():
+            if key not in merged_constraints:
+                merged_constraints[key] = val
+            else:
+                existing = merged_constraints[key]
+                if isinstance(val, bool):
+                    merged_constraints[key] = existing or val
+                elif key.startswith("max_"):
+                    merged_constraints[key] = min(existing, val)
+                elif key.startswith("min_"):
+                    merged_constraints[key] = max(existing, val)
+                elif isinstance(val, (int, float)):
+                    # For generic numeric keys, prefer lower (more restrictive)
+                    merged_constraints[key] = min(existing, val)
+                else:
+                    merged_constraints[key] = val
+
+    # Combined label
+    labels = [r.condition_label for r in results if r.condition_label]
+    label = " + ".join(labels) if labels else ""
+
+    return RuleResult(
+        allowed=True,
+        forbidden_tags=sorted(all_forbidden),
+        macro_target=macro,
+        extra_constraints=merged_constraints,
+        condition_label=label,
+    )
+
+
 def get_available_conditions() -> list[dict]:
-    """Return all available conditions with labels for UI selection."""
+    """Return all available conditions with labels for UI selection.
+
+    The "none" condition is omitted — it's the default when no conditions are selected.
+    Each condition includes an optional "sex" field for sex-specific filtering.
+    """
     return [
-        {"id": key, "label": info["label"]}
+        {"id": key, "label": info["label"], "sex": info.get("sex")}
         for key, info in CONDITION_RULES.items()
+        if key != "none"
     ]

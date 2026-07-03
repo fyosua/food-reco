@@ -24,7 +24,7 @@ from app.models.rate_limit import RateLimitBucket
 from app.models.user import User
 from app.pricing import resolve_price_multiplier, compute_food_price, compute_budget
 from app.reco.filter import filter_candidates, parse_json_tags
-from app.reco.rules import get_rule_result, get_available_conditions
+from app.reco.rules import get_combined_rule_result, get_available_conditions
 from app.reco.weights import DEFAULT_WEIGHTS
 from app.core.config import settings
 
@@ -35,10 +35,11 @@ router = APIRouter(tags=["plan"])
 
 
 class PlanRequest(BaseModel):
-    condition: str = Field(default="none", description="Health condition")
+    conditions: list[str] = Field(default=["none"], description="Health conditions (list of condition IDs)")
     sex: str = Field(default="male", description="Sex: male or female")
     city_id: int = Field(..., description="City ID for price tier resolution")
     age_group: str = Field(default="adult", description="Age group: adult, elderly, teen")
+    daily_budget_idr: int | None = Field(default=None, description="Optional daily budget override")
 
 
 class ChatRequest(BaseModel):
@@ -105,7 +106,7 @@ async def generate_plan(
       7. Persist meal history
     """
     # ── 1. Rate limit check ──
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).date()
     result = await db.execute(
         select(RateLimitBucket).where(
             RateLimitBucket.user_id == user.id,
@@ -136,14 +137,14 @@ async def generate_plan(
     )
 
     # ── 3. Rules layer ──
-    rule = get_rule_result(request.condition, request.sex, request.age_group)
+    rule = get_combined_rule_result(request.conditions, request.sex, request.age_group)
     macro_target = rule.macro_target
 
     # ── 4. Candidate filter (hard gates + preference scoring) ──
     ranked = await filter_candidates(
         db=db,
         user=user,
-        condition=request.condition,
+        conditions=request.conditions,
         sex=request.sex,
         age_group=request.age_group,
         weights=DEFAULT_WEIGHTS,
@@ -193,8 +194,34 @@ async def generate_plan(
     )
     recent_meals = [m.slot for m in recent_meals_result.scalars().all()]
 
+    # Check if user already generated a plan today with the same params
+    # Only block the most recent plan's foods (not all history) so foods can repeat after 1 skip
+    already_suggested_ids: list[str] = []
+    most_recent_same = await db.execute(
+        select(MealHistory)
+        .where(
+            MealHistory.user_id == user.id,
+            MealHistory.condition == "+".join(request.conditions),
+            MealHistory.sex == request.sex,
+            MealHistory.city_id == request.city_id,
+            MealHistory.served_at >= datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0),
+        )
+        .order_by(MealHistory.served_at.desc())
+        .limit(1)
+    )
+    most_recent_entry = most_recent_same.scalar_one_or_none()
+    if most_recent_entry:
+        # Get all food IDs from that same plan (not forever, just the most recent)
+        plan_entries = await db.execute(
+            select(MealHistory).where(
+                MealHistory.user_id == user.id,
+                MealHistory.plan_id == most_recent_entry.plan_id,
+            )
+        )
+        already_suggested_ids = [str(m.food_item_id) for m in plan_entries.scalars().all()]
+
     user_info = {
-        "condition": request.condition,
+        "condition": "+".join(request.conditions),
         "sex": request.sex,
         "city": city.name,
         "price_tier": price_tier_label,
@@ -217,6 +244,7 @@ async def generate_plan(
         candidates=candidate_dicts,
         forbidden_tags=rule.forbidden_tags,
         recent_meals=recent_meals,
+        already_suggested_ids=already_suggested_ids,
     )
 
     plan_data = await llm.generate_plan(
@@ -273,7 +301,7 @@ async def generate_plan(
                 food_item_id=item_id,
                 served_at=datetime.now(timezone.utc),
                 slot=meal_data.get("slot", "lunch"),
-                condition=request.condition,
+                condition="+".join(request.conditions),
                 sex=request.sex,
                 city_id=request.city_id,
                 plan_id=plan_id,
@@ -319,7 +347,7 @@ async def chat_adjust_plan(
     Takes the current plan and a user message, returns the adjusted plan.
     """
     # Rate limit check
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).date()
     result = await db.execute(
         select(RateLimitBucket).where(
             RateLimitBucket.user_id == user.id,
@@ -343,8 +371,12 @@ async def chat_adjust_plan(
     if not history_entries:
         raise HTTPException(status_code=404, detail="Plan not found")
 
-    # Get the first entry's metadata
+    # Get the first entry's metadata and resolve city
     entry = history_entries[0]
+    city_result = await db.execute(select(City).where(City.id == entry.city_id))
+    orig_city = city_result.scalar_one_or_none()
+    province_result = await db.execute(select(Province))
+    provinces_map = {p.code: p.price_multiplier for p in province_result.scalars().all()}
 
     # Build current plan data from history
     current_plan = {"meals": [], "notes": "Adjusted plan"}
@@ -382,21 +414,78 @@ async def chat_adjust_plan(
             detail="Failed to adjust plan. Please try again.",
         )
 
-    # Build response
+    # Build response — compute real data from DB item IDs
     new_plan_id = f"plan_{user.id}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
     meals = []
+    total_budget = 0
+    total_nutrition = {"calories": 0.0, "protein_g": 0.0, "carbs_g": 0.0, "fat_g": 0.0, "fiber_g": 0.0}
+
     for meal_data in adjusted.get("meals", []):
-        if not meal_data.get("dataset_item_ids"):
+        item_ids = meal_data.get("dataset_item_ids", [])
+        if not item_ids:
             continue
+
+        # Look up real food data from DB
+        food_result = await db.execute(
+            select(FoodItem).where(FoodItem.id.in_(item_ids))
+        )
+        food_items = list(food_result.scalars().all())
+        if not food_items:
+            continue
+
+        # Use the first item for display, or combine multiple
+        primary = food_items[0]
+
+        # ── BUG FIX: LLM often changes name but keeps old IDs ──
+        # If the LLM's name doesn't match the DB item, try to find the
+        # correct item by name from the DB
+        llm_name = (meal_data.get("name") or "").strip().lower()
+        db_name = (primary.name_id or "").strip().lower()
+        if llm_name and llm_name != db_name:
+            # Search DB for a food item matching the LLM's name
+            name_search = await db.execute(
+                select(FoodItem).where(FoodItem.name_id.ilike(f"%{llm_name}%"))
+            )
+            matched = name_search.scalar_one_or_none()
+            if matched:
+                primary = matched
+                item_ids = [matched.id]
+            # else: keep the old item but use LLM's name for display
+
+        item_prices = [f.price_pasar_min or 0 for f in food_items]
+
+        # Resolve price multiplier from the original plan's city
+        mult, _ = resolve_price_multiplier(
+            province_code=orig_city.province_code if orig_city else "",
+            is_jabodetabek=bool(orig_city and orig_city.is_jabodetabek),
+            provinces=provinces_map,
+        )
+
+        item_price_idr = int(min(item_prices) * mult) if item_prices else 0
+        total_budget += item_price_idr
+
+        # Build nutrition from real data
+        nutrition = {
+            "calories": primary.calories or 0,
+            "protein_g": primary.protein_g or 0,
+            "carbs_g": primary.carbs_g or 0,
+            "fat_g": primary.fat_g or 0,
+            "fiber_g": primary.fiber_g or 0,
+        }
+        for k in total_nutrition:
+            total_nutrition[k] += nutrition.get(k, 0)
+
         meal_resp = MealResponse(
             slot=meal_data.get("slot", "lunch"),
-            name=meal_data.get("name", "Unknown"),
-            name_en=meal_data.get("name_en"),
-            description=meal_data.get("description", ""),
-            ingredients=meal_data.get("ingredients", []),
-            nutrition=meal_data.get("nutrition", {}),
-            prep_type=meal_data.get("prep_type", "buy_ready"),
-            dataset_item_ids=meal_data.get("dataset_item_ids", []),
+            name=primary.name_id or meal_data.get("name", "Unknown"),
+            name_en=primary.name_en or meal_data.get("name_en"),
+            description=meal_data.get("description", "") or primary.name_id or "",
+            ingredients=[primary.name_id] if primary.name_id else [],
+            nutrition=nutrition,
+            prep_type=primary.prep_type or "buy_ready",
+            dataset_item_ids=item_ids,
+            price_idr=item_price_idr,
+            image_url=None,
         )
         meals.append(meal_resp)
 
@@ -431,8 +520,12 @@ async def chat_adjust_plan(
     return PlanResponse(
         plan_id=new_plan_id,
         meals=meals,
-        budget={"total_cost_idr": 0, "note": "Budget depends on items"},
-        macro_targets={},
+        budget={
+            "total_cost_idr": total_budget,
+            "note": "Recalculated from database",
+            "city": orig_city.name if orig_city else None,
+        },
+        macro_targets=total_nutrition,
         notes=adjusted.get("notes"),
     )
 

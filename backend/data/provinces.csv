@@ -1,0 +1,39 @@
+code,name,island_group,price_multiplier
+aceh,Aceh,Sumatra,0.92
+sumatera_utara,Sumatera Utara,Sumatra,0.95
+sumatera_barat,Sumatera Barat,Sumatra,0.93
+riau,Riau,Sumatra,0.97
+jambi,Jambi,Sumatra,0.90
+sumatera_selatan,Sumatera Selatan,Sumatra,0.91
+bengkulu,Bengkulu,Sumatra,0.88
+lampung,Lampung,Sumatra,0.89
+kep_bangka_belitung,Kep. Bangka Belitung,Sumatra,0.94
+kep_riau,Kep. Riau,Sumatra,1.02
+dki_jakarta,DKI Jakarta,Java,1.25
+jawa_barat,Jawa Barat,Java,1.05
+jawa_tengah,Jawa Tengah,Java,0.88
+di_yogyakarta,DI Yogyakarta,Java,0.90
+jawa_timur,Jawa Timur,Java,0.87
+banten,Banten,Java,1.02
+bali,Bali,Nusa Tenggara,1.20
+ntb,NTB,Nusa Tenggara,0.85
+ntt,NTT,Nusa Tenggara,0.82
+kalimantan_barat,Kalimantan Barat,Kalimantan,0.95
+kalimantan_tengah,Kalimantan Tengah,Kalimantan,0.93
+kalimantan_selatan,Kalimantan Selatan,Kalimantan,0.92
+kalimantan_timur,Kalimantan Timur,Kalimantan,1.10
+kalimantan_utara,Kalimantan Utara,Kalimantan,1.05
+sulawesi_utara,Sulawesi Utara,Sulawesi,0.98
+sulawesi_tengah,Sulawesi Tengah,Sulawesi,0.92
+sulawesi_selatan,Sulawesi Selatan,Sulawesi,0.95
+sulawesi_tenggara,Sulawesi Tenggara,Sulawesi,0.90
+gorontalo,Gorontalo,Sulawesi,0.88
+sulawesi_barat,Sulawesi Barat,Sulawesi,0.90
+maluku,Maluku,Maluku,1.05
+maluku_utara,Maluku Utara,Maluku,1.02
+papua,Papua,Papua,1.30
+papua_barat,Papua Barat,Papua,1.25
+papua_tengah,Papua Tengah,Papua,1.28
+papua_pegunungan,Papua Pegunungan,Papua,1.30
+papua_selatan,Papua Selatan,Papua,1.28
+papua_barat_daya,Papua Barat Daya,Papua,1.25

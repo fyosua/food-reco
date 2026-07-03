@@ -16,7 +16,7 @@ class UserPref(TimestampMixin, Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False)
 
     # Defaults for plan generation
-    default_condition: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    default_condition: Mapped[str | None] = mapped_column(String(200), nullable=True)
     default_sex: Mapped[str | None] = mapped_column(String(10), nullable=True)
     default_city_id: Mapped[int | None] = mapped_column(ForeignKey("city.id"), nullable=True)
 

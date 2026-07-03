@@ -19,7 +19,7 @@ class MealHistory(TimestampMixin, Base):
     food_item_id: Mapped[int] = mapped_column(ForeignKey("food_item.id"), nullable=False)
     served_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     slot: Mapped[str] = mapped_column(String(20), nullable=False)  # breakfast | lunch | dinner | snack
-    condition: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    condition: Mapped[str | None] = mapped_column(String(100), nullable=True)
     sex: Mapped[str | None] = mapped_column(String(10), nullable=True)
     city_id: Mapped[int | None] = mapped_column(ForeignKey("city.id"), nullable=True)
     plan_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
