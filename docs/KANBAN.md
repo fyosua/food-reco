@@ -12,7 +12,7 @@
 |------|-------|----------|
 || M1 Scaffold & foundations | 6 | 🟢 5/6 done (M1.4 CI WIP) |
 || M2 Auth & users | 6 | 🟢 5/6 done (M2.5 tests pending) |
-|| M3 Data pipeline | 6 | ⬜ Not started |
+|| M3 Data pipeline | 6 | 🟢 5/6 done (M3.6 seed starter data pending) |
 || M4 Recommendation core | 6 | ⬜ Not started |
 || M5 Variety, chat, feedback | 4 | ⬜ Not started |
 || M6 Frontend | 5 | ⬜ Not started |
@@ -48,12 +48,12 @@
 
 | Card | Description | Status | Branch | PR |
 |------|-------------|--------|--------|----|
-| M3.1 | `crawl_source` config + robots.txt/ToS honoring fetcher | Backlog | — | — |
-| M3.2 | Parser + normalizer (units, canonical names, dedupe) | Backlog | — | — |
-| M3.3 | Verification gate vs TKPI + price sanity + allergen/pregnancy tagging | Backlog | — | — |
-| M3.4 | Admin verify endpoints + human-queue | Backlog | — | — |
-| M3.5 | Provenance + private-data handling; data-QA tests | Backlog | — | — |
-| M3.6 | Seed a small verified starter dataset | Backlog | — | — |
+|| M3.1 | `crawl_source` config + robots.txt/ToS honoring fetcher | Done | main | — |
+|| M3.2 | Parser + normalizer (units, canonical names, dedupe) | Done | main | — |
+|| M3.3 | Verification gate vs TKPI + price sanity + allergen/pregnancy tagging | Done | main | — |
+|| M3.4 | Admin verify endpoints + human-queue | Done | main | — |
+|| M3.5 | Provenance + private-data handling; data-QA tests | Done | main | — |
+|| M3.6 | Seed a small verified starter dataset | Backlog | — | — |
 
 ### EPIC M4 — Recommendation core
 
