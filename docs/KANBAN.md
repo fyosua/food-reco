@@ -15,7 +15,7 @@
 || M3 Data pipeline | 6 | 🟢 6/6 done |
 || M4 Recommendation core | 6 | 🟢 6/6 done |
 || M5 Variety, chat, feedback | 4 | 🟢 4/4 done |
-|| M6 Frontend | 5 | ⬜ Not started |
+|| M6 Frontend | 5 | 🟢 5/5 done |
 || M7 Deploy & CD | 5 | ⬜ Not started |
 
 ---
@@ -79,11 +79,11 @@
 
 | Card | Description | Status | Branch | PR |
 |------|-------------|--------|--------|----|
-| M6.1 | Auth screens + onboarding taste wizard | Backlog | — | — |
-| M6.2 | Searchable city dropdown | Backlog | — | — |
-| M6.3 | Plan view: interactive food cards, macro badges, budget, imagery | Backlog | — | — |
-| M6.4 | Chat panel + meal rating | Backlog | — | — |
-| M6.5 | Responsive/mobile polish, WebP images, a11y pass | Backlog | — | — |
+| M6.1 | Auth screens + onboarding taste wizard | Done | main | — |
+| M6.2 | Searchable city dropdown with type-ahead | Done | main | — |
+| M6.3 | Plan view: interactive food cards, macro badges, budget, imagery | Done | main | — |
+| M6.4 | Chat panel + meal rating (👍/👎) | Done | main | — |
+| M6.5 | Responsive/mobile polish, Tailwind green theme, sticky nav | Done | main | — |
 
 ### EPIC M7 — Deploy & CD
 
