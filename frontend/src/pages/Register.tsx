@@ -1,8 +1,6 @@
 import { Link } from "react-router-dom";
 
 export default function RegisterPage() {
-  const ownerEmail = "ferdianyosua@gmail.com";
-
   return (
     <div className="flex items-center justify-center min-h-[70vh] px-4">
       <div className="w-full max-w-md text-center">
@@ -37,14 +35,8 @@ export default function RegisterPage() {
             Ingin mencoba FoodReco?
           </p>
           <p className="text-sm text-blue-700">
-            Hubungi pemilik melalui email di bawah ini untuk meminta akun:
+            Silakan hubungi pemilik aplikasi secara langsung untuk meminta akun.
           </p>
-          <a
-            href={`mailto:${ownerEmail}`}
-            className="block mt-2 text-blue-600 font-semibold hover:underline text-sm"
-          >
-            {ownerEmail}
-          </a>
         </div>
 
         <p className="text-sm text-gray-500">

@@ -14,6 +14,13 @@ class MealHistory(TimestampMixin, Base):
 
     __tablename__ = "meal_history"
 
+    __table_args__ = (
+        # Composite indexes for common queries
+        __import__("sqlalchemy").Index("ix_meal_history_user_served", "user_id", "served_at"),
+        __import__("sqlalchemy").Index("ix_meal_history_user_plan", "user_id", "plan_id"),
+        __import__("sqlalchemy").Index("ix_meal_history_user_cond", "user_id", "condition", "sex", "city_id"),
+    )
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     food_item_id: Mapped[int] = mapped_column(ForeignKey("food_item.id"), nullable=False)

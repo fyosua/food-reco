@@ -30,10 +30,15 @@ class Settings(BaseSettings):
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     llm_primary_model: str = "deepseek/deepseek-v4-flash"
     llm_failover_model: str = "gemini/gemini-2.0-flash-exp"
+    llm_max_tokens: int = 1500
+    llm_provider_sort: str = "latency"
 
     # ── Rate limits (per user per day) ──
     daily_plan_limit: int = 20
     daily_chat_limit: int = 60
+
+    # ── Recommendation ──
+    reco_top_n_candidates: int = 10
 
     # ── SMTP (email verification) ──
     smtp_host: str = ""

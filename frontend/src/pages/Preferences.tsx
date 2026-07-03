@@ -22,31 +22,7 @@ const CUISINES = [
   { id: "western", label: "Western" },
 ];
 
-const CONDITIONS = [
-  { id: "none", label: "No specific condition", sex: null },
-  { id: "pregnant", label: "Pregnancy", sex: "female" },
-  { id: "diabetes", label: "Diabetes", sex: null },
-  { id: "hypertension", label: "Hypertension", sex: null },
-  { id: "heart_disease", label: "Heart Disease", sex: null },
-  { id: "kidney_disease", label: "Kidney Disease", sex: null },
-  { id: "weight_loss", label: "Weight Loss", sex: null },
-  { id: "lactose_intolerant", label: "Lactose Intolerant", sex: null },
-  { id: "vegan", label: "Vegan", sex: null },
-  { id: "vegetarian", label: "Vegetarian", sex: null },
-  { id: "ulcer", label: "Stomach Ulcer / GERD", sex: null },
-  { id: "gout", label: "Gout / High Uric Acid", sex: null },
-  { id: "anemia", label: "Anemia", sex: null },
-];
-
 const PROTEINS = ["chicken", "beef", "fish", "egg", "tofu", "tempeh", "shrimp", "lamb"];
-
-const CONDITION_LABELS: Record<string, string> = {
-  pregnant: "Pregnancy", diabetes: "Diabetes", hypertension: "Hypertension",
-  heart_disease: "Heart Disease", kidney_disease: "Kidney Disease",
-  weight_loss: "Weight Loss", lactose_intolerant: "Lactose Intolerant",
-  vegan: "Vegan", vegetarian: "Vegetarian", ulcer: "Stomach Ulcer / GERD",
-  gout: "Gout / High Uric Acid", anemia: "Anemia",
-};
 
 type OnboardingStep = "welcome" | "allergies" | "dislikes" | "likes" | "cuisines" | "spice" | "prep" | "condition" | "city" | "done" | "summary";
 
@@ -72,15 +48,28 @@ export default function PreferencesPage() {
   const [dailyBudget, setDailyBudget] = useState(50000);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [conditions, setConditions] = useState<{id: string; label: string; sex?: string | null}[]>([]);
+  const [conditionLabels, setConditionLabels] = useState<Record<string, string>>({});
 
   // Load existing preferences on mount
   useEffect(() => {
     async function loadPrefs() {
       try {
-        const [prefsRes, cityRes] = await Promise.all([
+        const [prefsRes, cityRes, condRes] = await Promise.all([
           api.getPreferences().catch(() => null),
           api.searchCities("", 1000).catch(() => [] as City[]),
+          api.getConditions().catch(() => ({conditions: []})),
         ]);
+
+        // Build condition labels from API
+        const labels: Record<string, string> = {};
+        if (condRes.conditions) {
+          setConditions(condRes.conditions);
+          for (const c of condRes.conditions) {
+            labels[c.id] = c.label;
+          }
+        }
+        setConditionLabels(labels);
         if (prefsRes && prefsRes.default_conditions && prefsRes.default_conditions.length > 0) {
           setSavedPrefs(prefsRes);
           setAllergies(prefsRes.exclusions_json ? JSON.parse(prefsRes.exclusions_json) : []);
@@ -175,7 +164,7 @@ export default function PreferencesPage() {
               {savedPrefs.default_conditions && savedPrefs.default_conditions.length > 0
                 ? savedPrefs.default_conditions.map((c: string) => (
                     <span key={c} className="px-2.5 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-medium">
-                      {CONDITION_LABELS[c] || c}
+                      {conditionLabels[c] || c}
                     </span>
                   ))
                 : <span className="text-gray-400 text-sm">Tidak ada kondisi khusus</span>}
@@ -582,7 +571,7 @@ export default function PreferencesPage() {
             Aturan kesehatan akan digabungkan secara otomatis
           </p>
           <div className="flex flex-wrap gap-2 mb-6">
-            {CONDITIONS.filter(c => c.id !== "none" && (!c.sex || c.sex === sex)).map((c) => {
+            {conditions.filter(c => c.id !== "none" && (!c.sex || c.sex === sex)).map((c) => {
               const isSelected = condition.includes(c.id);
               return (
                 <button
@@ -630,7 +619,7 @@ export default function PreferencesPage() {
                       // Auto-deselect female-only conditions if switching to male
                       if (opt.id === "male") {
                         setCondition((prev) => prev.filter((cId) => {
-                          const cond = CONDITIONS.find((c) => c.id === cId);
+                          const cond = conditions.find((c) => c.id === cId);
                           return !cond || !cond.sex || cond.sex !== "female";
                         }));
                       }

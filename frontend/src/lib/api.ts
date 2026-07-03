@@ -70,6 +70,7 @@ export interface City {
 export interface Condition {
   id: string;
   label: string;
+  sex?: string | null;
 }
 
 export interface PlanRequest {

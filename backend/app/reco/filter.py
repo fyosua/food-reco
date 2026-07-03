@@ -30,6 +30,7 @@ from app.models.prefs import UserPref, UserTaste
 from app.reco.rules import RuleResult, get_combined_rule_result
 from app.reco.scorer import score_and_rank, get_recent_meal_ids
 from app.reco.weights import DEFAULT_WEIGHTS, ScoringWeights
+from app.core.config import settings
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -91,13 +92,19 @@ async def filter_candidates(
     tastes = list(tastes_result.scalars().all())
 
     # 3. Get recent meal IDs for variety/non-repetition
+    from datetime import datetime, timedelta, timezone
+    window_days = weights.recency_window_days
+    cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
     history_result = await db.execute(
-        select(MealHistory).where(MealHistory.user_id == user.id)
+        select(MealHistory).where(
+            MealHistory.user_id == user.id,
+            MealHistory.served_at >= cutoff,
+        ).order_by(MealHistory.served_at.desc())
     )
     recent_meals = list(history_result.scalars().all())
     recent_meal_ids = get_recent_meal_ids(
         recent_meals,
-        window_days=weights.recency_window_days,
+        window_days=window_days,
     )
 
     # 4. Load all active food items

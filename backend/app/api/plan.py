@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.routes import get_current_user
 from app.core.database import get_db
@@ -22,9 +23,10 @@ from app.models.meal import MealHistory, MealFeedback
 from app.models.prefs import UserPref, UserTaste
 from app.models.rate_limit import RateLimitBucket
 from app.models.user import User
+from app.models.health_condition import HealthCondition
 from app.pricing import resolve_price_multiplier, compute_food_price, compute_budget
 from app.reco.filter import filter_candidates, parse_json_tags
-from app.reco.rules import get_combined_rule_result, get_available_conditions
+from app.reco.rules import get_combined_rule_result
 from app.reco.weights import DEFAULT_WEIGHTS
 from app.core.config import settings
 
@@ -83,9 +85,22 @@ class ConditionsResponse(BaseModel):
 
 
 @router.get("/api/plan/conditions")
-async def list_conditions() -> ConditionsResponse:
-    """List all available health conditions with labels."""
-    return ConditionsResponse(conditions=get_available_conditions())
+async def list_conditions(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ConditionsResponse:
+    """List all available health conditions from the database (admin-managed)."""
+    from sqlalchemy import select as sa_select
+    result = await db.execute(
+        sa_select(HealthCondition).where(HealthCondition.active == True).order_by(HealthCondition.code)
+    )
+    conditions = result.scalars().all()
+    return ConditionsResponse(
+        conditions=[
+            {"id": c.code, "label": c.name_id, "sex": c.sex}
+            for c in conditions
+        ]
+    )
 
 
 @router.post("/api/plan", response_model=PlanResponse)
@@ -126,9 +141,12 @@ async def generate_plan(
     if not city:
         raise HTTPException(status_code=404, detail="City not found")
 
-    # Load province and override data
-    province_result = await db.execute(select(Province))
-    provinces_map = {p.code: p.price_multiplier for p in province_result.scalars().all()}
+    # Load only this city's province multiplier (not the whole table)
+    province_result = await db.execute(
+        select(Province).where(Province.code == city.province_code)
+    )
+    province = province_result.scalar_one_or_none()
+    provinces_map = {province.code: province.price_multiplier} if province else {}
 
     multiplier, price_tier_label = resolve_price_multiplier(
         province_code=city.province_code,
@@ -148,29 +166,31 @@ async def generate_plan(
         sex=request.sex,
         age_group=request.age_group,
         weights=DEFAULT_WEIGHTS,
-        top_n_per_slot=10,
+        top_n_per_slot=settings.reco_top_n_candidates,
         slots=["breakfast", "lunch", "dinner"],
     )
 
-    # Flatten candidates for LLM prompt
+    # Flatten candidates into ONE deduplicated pool (not repeated per slot)
+    all_candidate_ids: set[int] = set()
+    for slot, items in ranked.items():
+        for food, _score in items:
+            all_candidate_ids.add(food.id)
+
+    # Build compact JSON for LLM — only essential fields
     candidate_dicts: dict[str, list[dict]] = {}
     for slot, items in ranked.items():
         candidate_dicts[slot] = []
-        for food, score in items:
+        for food, _score in items:
             candidate_dicts[slot].append({
                 "id": food.id,
-                "name_id": food.name_id,
-                "name_en": food.name_en,
-                "category": food.category,
-                "prep_type": food.prep_type,
-                "calories": food.calories,
-                "protein_g": food.protein_g,
-                "carbs_g": food.carbs_g,
-                "fat_g": food.fat_g,
-                "fiber_g": food.fiber_g,
-                "tags": parse_json_tags(food.tags_json),
-                "cuisine": parse_json_tags(food.cuisine_tags_json),
-                "score": round(score, 2),
+                "name": food.name_id,
+                "calories": food.calories or 0,
+                "protein_g": food.protein_g or 0,
+                "carbs_g": food.carbs_g or 0,
+                "fat_g": food.fat_g or 0,
+                "tags": list(parse_json_tags(food.tags_json)),
+                "cuisine": list(parse_json_tags(food.cuisine_tags_json)),
+                "prep": food.prep_type or "buy_ready",
             })
 
     # ── 5. Check if we have enough candidates ──
@@ -266,6 +286,21 @@ async def generate_plan(
     # Build meals with prices
     meals = []
     total_budget = 0
+
+    # Batch-load all food items referenced by the plan (kill N+1)
+    all_item_ids = set()
+    for meal_data in plan_data.get("meals", []):
+        for item_id in meal_data.get("dataset_item_ids", []):
+            all_item_ids.add(item_id)
+
+    food_map: dict[int, FoodItem] = {}
+    if all_item_ids:
+        foods_result = await db.execute(
+            select(FoodItem).where(FoodItem.id.in_(all_item_ids))
+        )
+        for f in foods_result.scalars().all():
+            food_map[f.id] = f
+
     for meal_data in plan_data.get("meals", []):
         if not meal_data.get("dataset_item_ids"):
             continue
@@ -273,10 +308,7 @@ async def generate_plan(
         # Compute price from IDs (never from model text)
         meal_price = 0
         for item_id in meal_data["dataset_item_ids"]:
-            food_result = await db.execute(
-                select(FoodItem).where(FoodItem.id == item_id)
-            )
-            food = food_result.scalar_one_or_none()
+            food = food_map.get(item_id)
             if food:
                 meal_price += compute_food_price(food, multiplier)
 

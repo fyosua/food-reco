@@ -54,6 +54,8 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown: cleanup
+    from app.llm.client import close_http_client
+    await close_http_client()
     await engine.dispose()
 
 

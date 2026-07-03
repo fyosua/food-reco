@@ -44,11 +44,11 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     """Registration is disabled for public access.
 
     New accounts can only be created by the server admin.
-    Contact ferdianyosua@gmail.com to request an account.
+    Contact the site owner to request an account.
     """
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="Pendaftaran ditutup. Hubungi pemilik di ferdianyosua@gmail.com untuk membuat akun.",
+        detail="Pendaftaran ditutup. Hubungi pemilik untuk membuat akun.",
     )
 
 

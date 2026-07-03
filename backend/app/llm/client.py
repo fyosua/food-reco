@@ -54,15 +54,37 @@ class LLMConfig(BaseModel):
 
 PRIMARY_MODEL = LLMConfig(
     model=settings.llm_primary_model or "deepseek/deepseek-v4-flash",
-    max_tokens=4096,
+    max_tokens=settings.llm_max_tokens,
     temperature=0.7,
 )
 
 FAILOVER_MODEL = LLMConfig(
     model=settings.llm_failover_model or "gemini/gemini-2.0-flash-exp",
-    max_tokens=4096,
+    max_tokens=settings.llm_max_tokens,
     temperature=0.7,
 )
+
+# Module-level HTTP client (reused across requests for keep-alive)
+_http_client: httpx.AsyncClient | None = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    """Get or create the shared HTTP client with keep-alive."""
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(
+            timeout=60.0,
+            limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=30.0),
+        )
+    return _http_client
+
+
+async def close_http_client() -> None:
+    """Close the shared HTTP client (call on app shutdown)."""
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
 
 
 class LLMClient:
@@ -71,7 +93,8 @@ class LLMClient:
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or settings.openrouter_api_key
         self.base_url = settings.openrouter_base_url
-        self.http_client = httpx.AsyncClient(timeout=60.0)
+        # Use the shared module-level client for keep-alive reuse
+        self.http_client = _get_http_client()
 
     async def _call_model(
         self,
@@ -122,6 +145,7 @@ class LLMClient:
                         "max_tokens": model_config.max_tokens,
                         "temperature": model_config.temperature,
                         "response_format": {"type": "json_object"},
+                        "provider": {"sort": settings.llm_provider_sort},
                     },
                 )
 
@@ -304,8 +328,8 @@ class LLMClient:
         return result
 
     async def close(self) -> None:
-        """Close the HTTP client."""
-        await self.http_client.aclose()
+        """No-op — shared client is managed at module level."""
+        pass
 
     @staticmethod
     def _repair_plan_format(parsed: dict) -> dict | None:
